@@ -49,6 +49,18 @@ interface AntigravityAccount {
 	projectId: string;
 }
 
+export interface AntigravityProviderDeps {
+	now?: () => number;
+	homeDir?: string;
+	platform?: NodeJS.Platform;
+	arch?: string;
+	fetch?: typeof fetch;
+	existsSync?: typeof fs.existsSync;
+	readFileSync?: typeof fs.readFileSync;
+	readdirSync?: typeof fs.readdirSync;
+	statSync?: typeof fs.statSync;
+}
+
 const GOOGLE_OAUTH_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 const GOOGLE_OAUTH_CLIENT_SECRET = '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';
 
@@ -63,10 +75,22 @@ export class AntigravityProvider extends UsageProvider {
 	private cachedResponse: AuthorizedQuotaResponse | null = null;
 	private responseCacheExpiry: number = 0;
 	private account: AntigravityAccount | null = null;
+	private readonly deps: Required<AntigravityProviderDeps>;
 
-	constructor(context: vscode.ExtensionContext) {
+	constructor(context: vscode.ExtensionContext, deps: AntigravityProviderDeps = {}) {
 		super();
 		this.context = context;
+		this.deps = {
+			now: deps.now ?? Date.now,
+			homeDir: deps.homeDir ?? os.homedir(),
+			platform: deps.platform ?? process.platform,
+			arch: deps.arch ?? process.arch,
+			fetch: deps.fetch ?? fetch,
+			existsSync: deps.existsSync ?? fs.existsSync,
+			readFileSync: deps.readFileSync ?? fs.readFileSync,
+			readdirSync: deps.readdirSync ?? fs.readdirSync,
+			statSync: deps.statSync ?? fs.statSync,
+		};
 	}
 
 	getServiceName(): string {
@@ -94,11 +118,9 @@ export class AntigravityProvider extends UsageProvider {
 	 * Try to read cached quota data directly from the cockpit extension's cache files.
 	 */
 	private async readCachedQuotaData(): Promise<AuthorizedQuotaResponse | null> {
-		const homeDir = os.homedir();
-
 		const knownFiles = [
-			path.join(homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1_plugin', 'authorized'),
-			path.join(homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1', 'authorized'),
+			path.join(this.deps.homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1_plugin', 'authorized'),
+			path.join(this.deps.homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1', 'authorized'),
 		];
 
 		for (const filePath of knownFiles) {
@@ -109,26 +131,26 @@ export class AntigravityProvider extends UsageProvider {
 		}
 
 		const cacheDirs = [
-			path.join(homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1_plugin'),
-			path.join(homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1'),
-			path.join(homeDir, '.antigravity_cockpit', 'cache'),
+			path.join(this.deps.homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1_plugin'),
+			path.join(this.deps.homeDir, '.antigravity_cockpit', 'cache', 'quota_api_v1'),
+			path.join(this.deps.homeDir, '.antigravity_cockpit', 'cache'),
 		];
 
 		for (const cacheDir of cacheDirs) {
 			try {
-				if (!fs.existsSync(cacheDir)) {
+				if (!this.deps.existsSync(cacheDir)) {
 					continue;
 				}
 
-				const allFiles = fs.readdirSync(cacheDir)
+				const allFiles = this.deps.readdirSync(cacheDir)
 					.filter(f => {
 						const fullPath = path.join(cacheDir, f);
-						return fs.statSync(fullPath).isFile();
+						return this.deps.statSync(fullPath).isFile();
 					});
 				console.log(`[Antigravity] Cache dir ${cacheDir}: files: ${allFiles.join(', ')}`);
 
 				const sortedFiles = allFiles
-					.map(f => ({ name: f, mtime: fs.statSync(path.join(cacheDir, f)).mtimeMs }))
+					.map(f => ({ name: f, mtime: this.deps.statSync(path.join(cacheDir, f)).mtimeMs }))
 					.sort((a, b) => b.mtime - a.mtime);
 
 				for (const file of sortedFiles) {
@@ -147,11 +169,11 @@ export class AntigravityProvider extends UsageProvider {
 
 	private async tryReadCacheFile(filePath: string): Promise<AuthorizedQuotaResponse | null> {
 		try {
-			if (!fs.existsSync(filePath)) {
+			if (!this.deps.existsSync(filePath)) {
 				return null;
 			}
 
-			const content = fs.readFileSync(filePath, 'utf-8');
+			const content = this.deps.readFileSync(filePath, 'utf-8');
 			const cached = JSON.parse(content);
 			const keys = Object.keys(cached);
 			console.log(`[Antigravity] File ${filePath}: keys=${keys.join(', ')}`);
@@ -190,7 +212,7 @@ export class AntigravityProvider extends UsageProvider {
 			}
 		}
 
-		const now = Date.now();
+		const now = this.deps.now();
 		let expiresAtMs: number;
 		if (typeof this.account.expiresAt === 'string') {
 			expiresAtMs = new Date(this.account.expiresAt).getTime();
@@ -220,10 +242,10 @@ export class AntigravityProvider extends UsageProvider {
 
 		for (const configPath of configPaths) {
 			try {
-				if (!fs.existsSync(configPath)) {
+				if (!this.deps.existsSync(configPath)) {
 					continue;
 				}
-				const content = fs.readFileSync(configPath, 'utf-8');
+				const content = this.deps.readFileSync(configPath, 'utf-8');
 				const config = JSON.parse(content);
 
 				const accounts = config.accounts;
@@ -256,7 +278,7 @@ export class AntigravityProvider extends UsageProvider {
 		}
 
 		try {
-			const response = await fetch('https://oauth2.googleapis.com/token', {
+			const response = await this.deps.fetch('https://oauth2.googleapis.com/token', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 				body: new URLSearchParams({
@@ -276,7 +298,7 @@ export class AntigravityProvider extends UsageProvider {
 
 			const data = await response.json() as { access_token: string; expires_in: number };
 			this.account.accessToken = data.access_token;
-			this.account.expiresAt = Date.now() + (data.expires_in * 1000);
+			this.account.expiresAt = this.deps.now() + (data.expires_in * 1000);
 			console.log(`[Antigravity] Token refreshed, new expiry: ${new Date(this.account.expiresAt).toISOString()}`);
 			return true;
 		} catch (error) {
@@ -314,7 +336,7 @@ export class AntigravityProvider extends UsageProvider {
 
 		// Cache the discovery response so sub-providers don't re-fetch immediately
 		this.cachedResponse = response;
-		this.responseCacheExpiry = Date.now() + this.CACHE_TTL;
+		this.responseCacheExpiry = this.deps.now() + this.CACHE_TTL;
 
 		const quotaGroups = this.groupModelsByQuota(response);
 		console.log(`[Antigravity] Discovered ${quotaGroups.size} quota group(s): ${[...quotaGroups.keys()].join(', ')}`);
@@ -337,7 +359,7 @@ export class AntigravityProvider extends UsageProvider {
 	 * Sub-providers call this so all share one API call.
 	 */
 	async getQuotaResponse(): Promise<AuthorizedQuotaResponse | null> {
-		if (this.cachedResponse && Date.now() < this.responseCacheExpiry) {
+		if (this.cachedResponse && this.deps.now() < this.responseCacheExpiry) {
 			return this.cachedResponse;
 		}
 
@@ -352,7 +374,7 @@ export class AntigravityProvider extends UsageProvider {
 
 		if (response) {
 			this.cachedResponse = response;
-			this.responseCacheExpiry = Date.now() + this.CACHE_TTL;
+			this.responseCacheExpiry = this.deps.now() + this.CACHE_TTL;
 		}
 
 		return response;
@@ -365,14 +387,6 @@ export class AntigravityProvider extends UsageProvider {
 		return groupAntigravityModelsByQuota(response);
 	}
 
-	private normalizeGroupMatchText(value: string | undefined): string {
-		return (value || '')
-			.toLowerCase()
-			.replace(/[_-]+/g, ' ')
-			.replace(/\s+/g, ' ')
-			.trim();
-	}
-
 	public resolveAutoGroupFamily(modelId: string, label?: string): string {
 		return resolveAntigravityAutoGroupFamily(modelId, label);
 	}
@@ -381,14 +395,18 @@ export class AntigravityProvider extends UsageProvider {
 		return getAntigravityGroupName(family);
 	}
 
+	getNow(): number {
+		return this.deps.now();
+	}
+
 	/**
 	 * Fetch quota data from Antigravity API
 	 * Matches vscode-antigravity-cockpit cloudcode_client.ts implementation
 	 */
 	private async fetchQuotaFromAPI(accessToken: string): Promise<AuthorizedQuotaResponse | null> {
 		const projectId = this.account?.projectId;
-		const platform = process.platform === 'darwin' ? 'macos' : process.platform;
-		const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
+		const platform = this.deps.platform === 'darwin' ? 'macos' : this.deps.platform;
+		const arch = this.deps.arch === 'arm64' ? 'arm64' : 'x86_64';
 		const userAgent = `antigravity/1.0.0 ${platform}/${arch}`;
 
 		// Cockpit defaults to daily endpoint, falls back to prod
@@ -401,7 +419,7 @@ export class AntigravityProvider extends UsageProvider {
 			const url = `${baseUrl}/v1internal:fetchAvailableModels`;
 			try {
 				console.log(`[Antigravity] Fetching quota from ${baseUrl} (projectId: ${projectId})`);
-				const response = await fetch(url, {
+				const response = await this.deps.fetch(url, {
 					method: 'POST',
 					headers: {
 						'Authorization': `Bearer ${accessToken}`,
@@ -496,6 +514,6 @@ class AntigravityQuotaGroupProvider extends UsageProvider {
 	}
 
 	private parseQuotaForGroup(groupModels: ModelInfo[]): UsageData {
-		return parseAntigravityQuotaForGroup(this.getServiceName(), groupModels, new Date());
+		return parseAntigravityQuotaForGroup(this.getServiceName(), groupModels, new Date(this.parent.getNow()));
 	}
 }

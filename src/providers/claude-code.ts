@@ -19,6 +19,51 @@ interface ClaudeCredentials {
 	};
 }
 
+interface ClaudeHttpResponse {
+	statusCode?: number;
+	body: string;
+}
+
+export interface ClaudeCodeProviderDeps {
+	now?: () => number;
+	platform?: NodeJS.Platform;
+	homeDir?: string;
+	fileExists?: (filePath: string) => Promise<boolean>;
+	readJsonFile?: <T>(filePath: string) => Promise<T | null>;
+	exec?: (command: string) => Promise<{ stdout: string; stderr?: string }>;
+	request?: (options: https.RequestOptions) => Promise<ClaudeHttpResponse>;
+}
+
+function defaultClaudeRequest(options: https.RequestOptions): Promise<ClaudeHttpResponse> {
+	return new Promise((resolve, reject) => {
+		const req = https.request(options, (res) => {
+			let data = '';
+
+			res.on('data', (chunk) => {
+				data += chunk;
+			});
+
+			res.on('end', () => {
+				resolve({
+					statusCode: res.statusCode,
+					body: data,
+				});
+			});
+		});
+
+		req.on('error', (error) => {
+			reject(error);
+		});
+
+		req.on('timeout', () => {
+			req.destroy();
+			reject(new Error('Request timeout'));
+		});
+
+		req.end();
+	});
+}
+
 /**
  * Provider for Claude Code usage tracking
  *
@@ -31,12 +76,28 @@ interface ClaudeCredentials {
  * - Cache: 180 seconds to avoid API hammering
  */
 export class ClaudeCodeProvider extends UsageProvider {
-	private readonly CLAUDE_DIR = joinPath(getHomeDir(), '.claude');
-	private readonly CREDENTIALS_FILE = joinPath(this.CLAUDE_DIR, '.credentials.json');
 	private readonly CACHE_TTL = 180 * 1000; // 3 minutes
+	private readonly claudeDir: string;
+	private readonly credentialsFile: string;
+	private readonly deps: Required<ClaudeCodeProviderDeps>;
 
 	private cachedData: UsageData | null = null;
 	private cacheExpiry: number = 0;
+
+	constructor(deps: ClaudeCodeProviderDeps = {}) {
+		super();
+		this.deps = {
+			now: deps.now ?? Date.now,
+			platform: deps.platform ?? process.platform,
+			homeDir: deps.homeDir ?? getHomeDir(),
+			fileExists: deps.fileExists ?? fileExists,
+			readJsonFile: deps.readJsonFile ?? readJsonFile,
+			exec: deps.exec ?? execAsync,
+			request: deps.request ?? defaultClaudeRequest,
+		};
+		this.claudeDir = joinPath(this.deps.homeDir, '.claude');
+		this.credentialsFile = joinPath(this.claudeDir, '.credentials.json');
+	}
 
 	getServiceName(): string {
 		return 'Claude Code';
@@ -44,7 +105,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 
 	async isAvailable(): Promise<boolean> {
 		// Check if ~/.claude directory exists and we can get auth token
-		if (!await fileExists(this.CLAUDE_DIR)) {
+		if (!await this.deps.fileExists(this.claudeDir)) {
 			return false;
 		}
 
@@ -58,7 +119,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 
 	async getUsage(): Promise<UsageData | null> {
 		// Return cached data if still valid
-		if (this.cachedData && Date.now() < this.cacheExpiry) {
+		if (this.cachedData && this.deps.now() < this.cacheExpiry) {
 			console.log('[ClaudeCode] Returning cached data');
 			return this.cachedData;
 		}
@@ -75,7 +136,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 			console.log('[ClaudeCode] Fetched usage data:', usageData);
 			if (usageData) {
 				this.cachedData = usageData;
-				this.cacheExpiry = Date.now() + this.CACHE_TTL;
+				this.cacheExpiry = this.deps.now() + this.CACHE_TTL;
 			}
 
 			return usageData;
@@ -94,9 +155,9 @@ export class ClaudeCodeProvider extends UsageProvider {
 	 */
 	private async getAuthToken(): Promise<string | null> {
 		// Try macOS keychain first
-		if (process.platform === 'darwin') {
+		if (this.deps.platform === 'darwin') {
 			try {
-				const { stdout } = await execAsync(
+				const { stdout } = await this.deps.exec(
 					'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null'
 				);
 				const keychainData = JSON.parse(stdout.trim());
@@ -109,7 +170,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 		}
 
 		// Try .credentials.json
-		const credentials = await readJsonFile<ClaudeCredentials>(this.CREDENTIALS_FILE);
+		const credentials = await this.deps.readJsonFile<ClaudeCredentials>(this.credentialsFile);
 		return credentials?.claudeAiOauth?.accessToken || null;
 	}
 
@@ -118,59 +179,37 @@ export class ClaudeCodeProvider extends UsageProvider {
 	 */
 	private async fetchUsageFromAPI(token: string): Promise<UsageData | null> {
 		console.log('[ClaudeCode] fetchUsageFromAPI called');
-		return new Promise((resolve, reject) => {
-			const options: https.RequestOptions = {
-				hostname: 'api.anthropic.com',
-				path: '/api/oauth/usage',
-				method: 'GET',
-				headers: {
-					'Authorization': `Bearer ${token}`,
-					'anthropic-beta': 'oauth-2025-04-20'
-				},
-				timeout: 5000
-			};
-
-			const req = https.request(options, (res) => {
-				let data = '';
-
-				res.on('data', (chunk) => {
-					data += chunk;
-				});
-
-				res.on('end', () => {
-					if (res.statusCode === 200) {
-						try {
-							const response: AnthropicUsageResponse = JSON.parse(data);
-							resolve(this.parseUsageResponse(response));
-						} catch (error) {
-							reject(new Error(`Failed to parse response: ${error}`));
-						}
-					} else if (res.statusCode === 429) {
-						// Rate limited - return cached data
-						resolve(this.cachedData);
-					} else {
-						reject(new Error(`API returned status ${res.statusCode}`));
-					}
-				});
-			});
-
-			req.on('error', (error) => {
-				reject(error);
-			});
-
-			req.on('timeout', () => {
-				req.destroy();
-				reject(new Error('Request timeout'));
-			});
-
-			req.end();
+		const response = await this.deps.request({
+			hostname: 'api.anthropic.com',
+			path: '/api/oauth/usage',
+			method: 'GET',
+			headers: {
+				'Authorization': `Bearer ${token}`,
+				'anthropic-beta': 'oauth-2025-04-20'
+			},
+			timeout: 5000
 		});
+
+		if (response.statusCode === 200) {
+			try {
+				return this.parseUsageResponse(JSON.parse(response.body) as AnthropicUsageResponse);
+			} catch (error) {
+				throw new Error(`Failed to parse response: ${error}`);
+			}
+		}
+
+		if (response.statusCode === 429) {
+			// Rate limited - return cached data
+			return this.cachedData;
+		}
+
+		throw new Error(`API returned status ${response.statusCode}`);
 	}
 
 	/**
 	 * Parse Anthropic API response into our UsageData format
 	 */
 	private parseUsageResponse(response: AnthropicUsageResponse): UsageData {
-		return parseClaudeUsageResponse(response, this.getServiceName(), new Date());
+		return parseClaudeUsageResponse(response, this.getServiceName(), new Date(this.deps.now()));
 	}
 }

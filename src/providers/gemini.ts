@@ -11,7 +11,6 @@ import {
 	extractValidGeminiModels,
 	humanizeGeminiModelLabel,
 	normalizeGeminiQuotaBuckets,
-	uniqueGeminiModelIds,
 } from './gemini-parse';
 
 const execAsync = promisify(exec);
@@ -94,6 +93,19 @@ interface GeminiDefaultModelConfigsModule {
 	};
 }
 
+export interface GeminiProviderDeps {
+	now?: () => number;
+	platform?: NodeJS.Platform;
+	env?: NodeJS.ProcessEnv;
+	homeDir?: string;
+	exec?: (command: string) => Promise<{ stdout: string; stderr?: string }>;
+	realpath?: (filePath: string) => Promise<string>;
+	fileExists?: (filePath: string) => Promise<boolean>;
+	readJsonFile?: <T>(filePath: string) => Promise<T | null>;
+	importModule?: (specifier: string) => Promise<unknown>;
+	fetch?: typeof fetch;
+}
+
 /**
  * Parent provider for Gemini CLI usage tracking.
  *
@@ -101,11 +113,12 @@ interface GeminiDefaultModelConfigsModule {
  * Child providers are registered per visible Gemini model.
  */
 export class GeminiProvider extends UsageProvider {
-	private readonly GEMINI_DIR = joinPath(getHomeDir(), '.gemini');
-	private readonly SETTINGS_FILE = joinPath(this.GEMINI_DIR, 'settings.json');
-	private readonly CREDENTIALS_FILE = joinPath(this.GEMINI_DIR, 'oauth_creds.json');
 	private readonly CACHE_TTL = 180 * 1000; // 3 minutes
 	private readonly CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com/v1internal';
+	private readonly geminiDir: string;
+	private readonly settingsFile: string;
+	private readonly credentialsFile: string;
+	private readonly deps: Required<GeminiProviderDeps>;
 
 	private hasDiscovered = false;
 	private discoverySource: GeminiDiscoverySource | null = null;
@@ -118,6 +131,25 @@ export class GeminiProvider extends UsageProvider {
 	private geminiBinaryPath: string | null = null;
 	private cliConfigPathsResolved = false;
 	private cliConfigPaths: GeminiCliConfigPaths | null = null;
+
+	constructor(deps: GeminiProviderDeps = {}) {
+		super();
+		this.deps = {
+			now: deps.now ?? Date.now,
+			platform: deps.platform ?? process.platform,
+			env: deps.env ?? process.env,
+			homeDir: deps.homeDir ?? getHomeDir(),
+			exec: deps.exec ?? execAsync,
+			realpath: deps.realpath ?? fs.realpath,
+			fileExists: deps.fileExists ?? fileExists,
+			readJsonFile: deps.readJsonFile ?? readJsonFile,
+			importModule: deps.importModule ?? ((specifier) => import(specifier)),
+			fetch: deps.fetch ?? fetch,
+		};
+		this.geminiDir = joinPath(this.deps.homeDir, '.gemini');
+		this.settingsFile = joinPath(this.geminiDir, 'settings.json');
+		this.credentialsFile = joinPath(this.geminiDir, 'oauth_creds.json');
+	}
 
 	getServiceName(): string {
 		return 'Gemini CLI';
@@ -136,7 +168,7 @@ export class GeminiProvider extends UsageProvider {
 			return false;
 		}
 
-		if (!await fileExists(this.GEMINI_DIR)) {
+		if (!await this.deps.fileExists(this.geminiDir)) {
 			this.isGeminiAvailable = false;
 			return false;
 		}
@@ -324,13 +356,13 @@ export class GeminiProvider extends UsageProvider {
 				'defaultModelConfigs.js'
 			);
 
-			if (!await fileExists(modelsFile) && !await fileExists(defaultModelConfigsFile)) {
+			if (!await this.deps.fileExists(modelsFile) && !await this.deps.fileExists(defaultModelConfigsFile)) {
 				continue;
 			}
 
 			this.cliConfigPaths = {
-				modelsFile: await fileExists(modelsFile) ? modelsFile : undefined,
-				defaultModelConfigsFile: await fileExists(defaultModelConfigsFile) ? defaultModelConfigsFile : undefined,
+				modelsFile: await this.deps.fileExists(modelsFile) ? modelsFile : undefined,
+				defaultModelConfigsFile: await this.deps.fileExists(defaultModelConfigsFile) ? defaultModelConfigsFile : undefined,
 			};
 
 			console.log(`[Gemini] Resolved Gemini CLI config files under ${packageRoot}`);
@@ -347,7 +379,7 @@ export class GeminiProvider extends UsageProvider {
 		}
 
 		try {
-			const module = await import(pathToFileURL(modelsFile).href) as GeminiModelsModule;
+			const module = await this.deps.importModule(pathToFileURL(modelsFile).href) as GeminiModelsModule;
 			return extractValidGeminiModels(module);
 		} catch (error) {
 			console.warn('[Gemini] Failed to load VALID_GEMINI_MODELS:', error);
@@ -361,16 +393,12 @@ export class GeminiProvider extends UsageProvider {
 		}
 
 		try {
-			const module = await import(pathToFileURL(defaultModelConfigsFile).href) as GeminiDefaultModelConfigsModule;
+			const module = await this.deps.importModule(pathToFileURL(defaultModelConfigsFile).href) as GeminiDefaultModelConfigsModule;
 			return extractGeminiModelsFromDefaultConfigs(module);
 		} catch (error) {
 			console.warn('[Gemini] Failed to load defaultModelConfigs fallback:', error);
 			return [];
 		}
-	}
-
-	private uniqueModelIds(modelIds: string[]): string[] {
-		return uniqueGeminiModelIds(modelIds);
 	}
 
 	private normalizeBuckets(
@@ -392,13 +420,13 @@ export class GeminiProvider extends UsageProvider {
 		this.geminiBinaryPathResolved = true;
 
 		try {
-			const { stdout } = await execAsync('which gemini');
+			const { stdout } = await this.deps.exec('which gemini');
 			const binaryPath = stdout.trim();
 			if (!binaryPath) {
 				return null;
 			}
 
-			this.geminiBinaryPath = await fs.realpath(binaryPath);
+			this.geminiBinaryPath = await this.deps.realpath(binaryPath);
 			return this.geminiBinaryPath;
 		} catch {
 			this.geminiBinaryPath = null;
@@ -407,7 +435,7 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private async getSelectedAuthType(): Promise<string | null> {
-		const settings = await readJsonFile<GeminiSettings>(this.SETTINGS_FILE);
+		const settings = await this.deps.readJsonFile<GeminiSettings>(this.settingsFile);
 		return settings?.security?.auth?.selectedType || null;
 	}
 
@@ -421,12 +449,12 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private async readCredentialsFromKeychain(): Promise<GoogleOAuthCredentials | null> {
-		if (process.platform !== 'darwin') {
+		if (this.deps.platform !== 'darwin') {
 			return null;
 		}
 
 		try {
-			const { stdout } = await execAsync(
+			const { stdout } = await this.deps.exec(
 				`security find-generic-password -s "${GEMINI_OAUTH_SERVICE}" -a "${GEMINI_OAUTH_ACCOUNT}" -w 2>/dev/null`
 			);
 			const raw = stdout.trim();
@@ -452,7 +480,7 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private async readCredentialsFromFile(): Promise<GoogleOAuthCredentials | null> {
-		return readJsonFile<GoogleOAuthCredentials>(this.CREDENTIALS_FILE);
+		return this.deps.readJsonFile<GoogleOAuthCredentials>(this.credentialsFile);
 	}
 
 	private async getAccessToken(): Promise<string | null> {
@@ -477,12 +505,12 @@ export class GeminiProvider extends UsageProvider {
 			return false;
 		}
 
-		return Date.now() >= expiryDate - 60_000;
+		return this.deps.now() >= expiryDate - 60_000;
 	}
 
 	private async refreshAccessToken(refreshToken: string): Promise<string | null> {
 		try {
-			const response = await fetch('https://oauth2.googleapis.com/token', {
+			const response = await this.deps.fetch('https://oauth2.googleapis.com/token', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/x-www-form-urlencoded'
@@ -511,7 +539,7 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private async getQuotaResponse(): Promise<RetrieveUserQuotaResponse | null> {
-		if (this.cachedQuotaResponse && Date.now() < this.cacheExpiry) {
+		if (this.cachedQuotaResponse && this.deps.now() < this.cacheExpiry) {
 			return this.cachedQuotaResponse;
 		}
 
@@ -533,7 +561,7 @@ export class GeminiProvider extends UsageProvider {
 
 			const quotaResponse = await this.fetchUserQuota(accessToken, projectId);
 			this.cachedQuotaResponse = quotaResponse;
-			this.cacheExpiry = Date.now() + this.CACHE_TTL;
+			this.cacheExpiry = this.deps.now() + this.CACHE_TTL;
 			return quotaResponse;
 		} catch (error) {
 			console.error('[Gemini] Failed to fetch usage:', error);
@@ -542,7 +570,7 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private async resolveProjectId(accessToken: string): Promise<string | null> {
-		const configuredProject = process.env['GOOGLE_CLOUD_PROJECT'] || process.env['GOOGLE_CLOUD_PROJECT_ID'];
+		const configuredProject = this.deps.env['GOOGLE_CLOUD_PROJECT'] || this.deps.env['GOOGLE_CLOUD_PROJECT_ID'];
 		const body: Record<string, unknown> = {
 			metadata: {
 				ideType: 'IDE_UNSPECIFIED',
@@ -573,7 +601,7 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private async postJson<T>(method: string, accessToken: string, body: unknown): Promise<T> {
-		const response = await fetch(`${this.CODE_ASSIST_ENDPOINT}:${method}`, {
+		const response = await this.deps.fetch(`${this.CODE_ASSIST_ENDPOINT}:${method}`, {
 			method: 'POST',
 			headers: {
 				'Authorization': `Bearer ${accessToken}`,
@@ -590,6 +618,10 @@ export class GeminiProvider extends UsageProvider {
 		}
 
 		return response.json() as Promise<T>;
+	}
+
+	getNow(): number {
+		return this.deps.now();
 	}
 }
 
@@ -630,7 +662,7 @@ class GeminiModelProvider extends UsageProvider {
 				totalLimit: modelUsage.limit,
 				resetTime: modelUsage.resetTime,
 				models: [modelUsage],
-				lastUpdated: new Date(),
+				lastUpdated: new Date(this.parent.getNow()),
 			};
 		} catch (error) {
 			console.error(`[${this.serviceName}] Failed to fetch usage:`, error);

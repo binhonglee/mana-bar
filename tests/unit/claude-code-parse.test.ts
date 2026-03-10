@@ -10,7 +10,7 @@ describe('parseClaudeUsageResponse', () => {
 
 		expect(result.totalUsed).toBe(65);
 		expect(result.resetTime?.toISOString()).toBe('2026-03-15T12:00:00.000Z');
-		expect(result.quotaWindows?.map(window => window.label)).toEqual(['5 Hour', '7 Day']);
+		expect(result.quotaWindows?.map(window => window.label)).toEqual(['5 Hour', '1 Week']);
 		expect(result.lastUpdated.toISOString()).toBe('2026-03-10T10:00:00.000Z');
 	});
 

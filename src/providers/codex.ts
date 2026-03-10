@@ -1,12 +1,25 @@
 import { UsageProvider } from './base';
 import { UsageData } from '../types';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, SpawnOptionsWithoutStdio } from 'child_process';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { CodexRateLimitsResponse, parseCodexRateLimitsResponse } from './codex-parse';
 
 const execAsync = promisify(exec);
+
+export interface CodexProviderDeps {
+	now?: () => number;
+	exec?: (command: string) => Promise<{ stdout: string; stderr?: string }>;
+	spawn?: (
+		command: string,
+		args: readonly string[],
+		options: SpawnOptionsWithoutStdio
+	) => ChildProcess;
+	kill?: (pid: number, signal: NodeJS.Signals) => void;
+	setTimeout?: typeof setTimeout;
+	clearTimeout?: typeof clearTimeout;
+}
 
 /**
  * Provider for Codex usage tracking
@@ -31,10 +44,19 @@ export class CodexProvider extends UsageProvider {
 	private context: vscode.ExtensionContext;
 	private nextRequestId = 1;
 	private isInitialized = false;
+	private readonly deps: Required<CodexProviderDeps>;
 
-	constructor(context: vscode.ExtensionContext) {
+	constructor(context: vscode.ExtensionContext, deps: CodexProviderDeps = {}) {
 		super();
 		this.context = context;
+		this.deps = {
+			now: deps.now ?? Date.now,
+			exec: deps.exec ?? execAsync,
+			spawn: deps.spawn ?? ((command, args, options) => spawn(command, args, options)),
+			kill: deps.kill ?? process.kill,
+			setTimeout: deps.setTimeout ?? setTimeout,
+			clearTimeout: deps.clearTimeout ?? clearTimeout,
+		};
 		this.cleanupOrphanedProcess();
 	}
 
@@ -45,7 +67,7 @@ export class CodexProvider extends UsageProvider {
 	async isAvailable(): Promise<boolean> {
 		try {
 			// Check if codex CLI is installed
-			await execAsync('which codex');
+			await this.deps.exec('which codex');
 			return true;
 		} catch {
 			return false;
@@ -54,7 +76,7 @@ export class CodexProvider extends UsageProvider {
 
 	async getUsage(): Promise<UsageData | null> {
 		// Return cached data if still valid
-		if (this.cachedData && Date.now() < this.cacheExpiry) {
+		if (this.cachedData && this.deps.now() < this.cacheExpiry) {
 			return this.cachedData;
 		}
 
@@ -72,7 +94,7 @@ export class CodexProvider extends UsageProvider {
 			const usageData = await this.fetchRateLimits();
 			if (usageData) {
 				this.cachedData = usageData;
-				this.cacheExpiry = Date.now() + this.CACHE_TTL;
+				this.cacheExpiry = this.deps.now() + this.CACHE_TTL;
 			}
 
 			return usageData;
@@ -96,10 +118,10 @@ export class CodexProvider extends UsageProvider {
 
 		try {
 			// Check if process exists and is codex app-server
-			const { stdout } = await execAsync(`ps -p ${storedPid} -o command=`);
+			const { stdout } = await this.deps.exec(`ps -p ${storedPid} -o command=`);
 			if (stdout.includes('codex') && stdout.includes('app-server')) {
 				console.log(`[Codex] Cleaning up orphaned codex app-server (PID ${storedPid})`);
-				process.kill(storedPid, 'SIGTERM');
+				this.deps.kill(storedPid, 'SIGTERM');
 			}
 		} catch {
 			// Process doesn't exist, that's fine
@@ -113,7 +135,7 @@ export class CodexProvider extends UsageProvider {
 	 */
 	private async spawnAppServer(): Promise<void> {
 		return new Promise((resolve, reject) => {
-			this.appServerProcess = spawn('codex', ['app-server'], {
+			this.appServerProcess = this.deps.spawn('codex', ['app-server'], {
 				stdio: ['pipe', 'pipe', 'pipe']
 			});
 
@@ -139,7 +161,7 @@ export class CodexProvider extends UsageProvider {
 			});
 
 			// Give it a moment to start
-			setTimeout(() => resolve(), 100);
+			this.deps.setTimeout(() => resolve(), 100);
 		});
 	}
 
@@ -203,6 +225,7 @@ export class CodexProvider extends UsageProvider {
 					try {
 						const response = JSON.parse(line);
 						if (response.id === request.id) {
+							this.deps.clearTimeout(timeout);
 							this.appServerProcess?.stdout?.off('data', onData);
 							resolve(response);
 							return;
@@ -216,7 +239,7 @@ export class CodexProvider extends UsageProvider {
 			this.appServerProcess.stdout.on('data', onData);
 
 			// Set timeout
-			const timeout = setTimeout(() => {
+			const timeout = this.deps.setTimeout(() => {
 				this.appServerProcess?.stdout?.off('data', onData);
 				reject(new Error('Request timeout'));
 			}, 5000);
@@ -224,7 +247,7 @@ export class CodexProvider extends UsageProvider {
 			// Send request
 			this.appServerProcess.stdin.write(requestJson, (error) => {
 				if (error) {
-					clearTimeout(timeout);
+					this.deps.clearTimeout(timeout);
 					this.appServerProcess?.stdout?.off('data', onData);
 					reject(error);
 				}
@@ -256,7 +279,7 @@ export class CodexProvider extends UsageProvider {
 	 * Parse rate limits response into our UsageData format
 	 */
 	private parseRateLimitsResponse(response: CodexRateLimitsResponse): UsageData {
-		return parseCodexRateLimitsResponse(response, this.getServiceName(), new Date());
+		return parseCodexRateLimitsResponse(response, this.getServiceName(), new Date(this.deps.now()));
 	}
 
 	/**
