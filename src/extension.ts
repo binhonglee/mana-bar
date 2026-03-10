@@ -112,4 +112,5 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
 	usageManager?.dispose();
+	usageManager = undefined;
 }

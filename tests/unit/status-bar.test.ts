@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import { StatusBarController } from '../../src/ui/status-bar';
 import { UsageData } from '../../src/types';
@@ -24,16 +24,24 @@ function createUsageManager(usageData: UsageData[]) {
 	};
 }
 
-function createConfigManager(layout: 'regular' | 'monospaced') {
+function createConfigManager(options?: {
+	layout?: 'regular' | 'monospaced';
+	displayMode?: 'used' | 'remaining';
+	hiddenServices?: string[];
+}) {
 	return {
-		getDisplayMode: () => 'used' as const,
-		getHiddenServices: () => [],
-		getStatusBarTooltipLayout: () => layout,
+		getDisplayMode: () => options?.displayMode ?? 'used' as const,
+		getHiddenServices: () => options?.hiddenServices ?? [],
+		getStatusBarTooltipLayout: () => options?.layout ?? 'regular',
 		onConfigChange: () => new vscode.Disposable(),
 	};
 }
 
 describe('StatusBarController', () => {
+	beforeEach(() => {
+		(vscode as any).__testing.reset();
+	});
+
 	afterEach(() => {
 		(vscode as any).__testing.resetStatusBarItem();
 	});
@@ -56,7 +64,7 @@ describe('StatusBarController', () => {
 	it('renders the fixed-width columns layout when configured', () => {
 		const controller = new StatusBarController(
 			createUsageManager(createUsageData()) as any,
-			createConfigManager('monospaced') as any
+			createConfigManager({ layout: 'monospaced' }) as any
 		);
 
 		const item = (vscode as any).__testing.getLastStatusBarItem();
@@ -69,6 +77,44 @@ describe('StatusBarController', () => {
 		expect(tooltip).toContain('Claude Code');
 		expect(tooltip).toContain('████░░░░░░');
 		expect(tooltip).not.toContain('42%');
+
+		controller.dispose();
+	});
+
+	it('renders a no-data status bar item when every service is hidden', () => {
+		const controller = new StatusBarController(
+			createUsageManager(createUsageData()) as any,
+			createConfigManager({ hiddenServices: ['Claude Code'] }) as any
+		);
+
+		const item = (vscode as any).__testing.getLastStatusBarItem();
+
+		expect(item.text).toBe('LLM Usage: No data');
+		expect(item.tooltip).toBe('No LLM services configured or available');
+
+		controller.dispose();
+	});
+
+	it('shows critical countdowns and Gemini CLI abbreviations in remaining mode', () => {
+		const controller = new StatusBarController(
+			createUsageManager([
+				{
+					serviceName: 'Gemini CLI 2.5 Flash Preview Vertex',
+					totalUsed: 100,
+					totalLimit: 100,
+					resetTime: new Date(Date.now() + (60 * 60 * 1000)),
+					lastUpdated: new Date(),
+				},
+			]) as any,
+			createConfigManager({ displayMode: 'remaining' }) as any
+		);
+
+		const item = (vscode as any).__testing.getLastStatusBarItem();
+		const tooltip = (item.tooltip as vscode.MarkdownString).value;
+
+		expect(item.text).toContain('🔴 GCLI 2.5 Flash');
+		expect(item.text).toContain('↻');
+		expect(tooltip).toContain('Gemini CLI 2.5 Flash Preview Vertex');
 
 		controller.dispose();
 	});

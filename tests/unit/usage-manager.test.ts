@@ -4,11 +4,14 @@ import { UsageProvider } from '../../src/providers/base';
 import { UsageData } from '../../src/types';
 
 class FakeProvider extends UsageProvider {
+	public disposeSpy?: () => void;
+
 	constructor(
 		private readonly serviceName: string,
 		private readonly usageData: UsageData,
 		private readonly available = true,
-		private readonly usageSpy?: () => void
+		private readonly usageSpy?: () => void,
+		private readonly error?: Error
 	) {
 		super();
 	}
@@ -23,15 +26,25 @@ class FakeProvider extends UsageProvider {
 
 	async getUsage(): Promise<UsageData | null> {
 		this.usageSpy?.();
+		if (this.error) {
+			throw this.error;
+		}
 		return this.usageData;
 	}
 
 	async getModels(): Promise<string[]> {
 		return [];
 	}
+
+	dispose(): void {
+		this.disposeSpy?.();
+	}
 }
 
-function createConfigManager(overrides?: Partial<Record<'claudeCode' | 'codex' | 'antigravity' | 'gemini', boolean>>) {
+function createConfigManager(
+	overrides?: Partial<Record<'claudeCode' | 'codex' | 'antigravity' | 'gemini', boolean>>,
+	pollingInterval = 60
+) {
 	return {
 		getServicesConfig: () => ({
 			claudeCode: { enabled: overrides?.claudeCode ?? true },
@@ -39,7 +52,7 @@ function createConfigManager(overrides?: Partial<Record<'claudeCode' | 'codex' |
 			antigravity: { enabled: overrides?.antigravity ?? true },
 			gemini: { enabled: overrides?.gemini ?? true },
 		}),
-		getPollingInterval: () => 60,
+		getPollingInterval: () => pollingInterval,
 	} as any;
 }
 
@@ -76,6 +89,7 @@ describe('UsageManager', () => {
 	});
 
 	afterEach(() => {
+		vi.useRealTimers();
 		vi.restoreAllMocks();
 	});
 
@@ -136,5 +150,62 @@ describe('UsageManager', () => {
 		expect(antigravitySpy).toHaveBeenCalledTimes(1);
 		expect(geminiSpy).not.toHaveBeenCalled();
 		expect(manager.getAllUsageData().map(item => item.serviceName)).toEqual(['Antigravity Gemini Flash']);
+	});
+
+	it('starts polling immediately, fires update events, and stops cleanly', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-03-10T10:00:00.000Z'));
+		const usageSpy = vi.fn();
+		const updateSpy = vi.fn();
+		const manager = new UsageManager(createConfigManager(undefined, 1));
+		manager.registerProvider(new FakeProvider('Codex', usageData('Codex', 30), true, usageSpy));
+		manager.onDidUpdateUsage(updateSpy);
+
+		manager.startPolling();
+		await vi.runAllTicks();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		expect(usageSpy).toHaveBeenCalledTimes(2);
+		expect(updateSpy).toHaveBeenCalledTimes(2);
+
+		manager.stopPolling();
+		await vi.advanceTimersByTimeAsync(2000);
+		expect(usageSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it('evicts expired cache entries based on the polling interval ttl', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-03-10T10:00:00.000Z'));
+		const manager = new UsageManager(createConfigManager(undefined, 1));
+		manager.registerProvider(new FakeProvider('Codex', usageData('Codex', 30)));
+
+		await manager.refreshAll();
+		expect(manager.getUsageData('Codex')?.totalUsed).toBe(30);
+
+		vi.advanceTimersByTime(1_001);
+		expect(manager.getUsageData('Codex')).toBeNull();
+		expect(manager.getAllUsageData()).toEqual([]);
+	});
+
+	it('keeps healthy providers updating when another provider throws and disposes providers', async () => {
+		const disposeSpy = vi.fn();
+		const manager = new UsageManager(createConfigManager());
+		const healthyProvider = new FakeProvider('Codex', usageData('Codex', 30));
+		healthyProvider.disposeSpy = disposeSpy;
+		manager.registerProvider(healthyProvider);
+		manager.registerProvider(new FakeProvider(
+			'Claude Code',
+			usageData('Claude Code', 20),
+			true,
+			undefined,
+			new Error('boom')
+		));
+
+		await manager.refreshAll();
+
+		expect(manager.getAllUsageData().map(item => item.serviceName)).toEqual(['Codex']);
+
+		manager.dispose();
+		expect(disposeSpy).toHaveBeenCalledTimes(1);
 	});
 });

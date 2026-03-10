@@ -120,6 +120,12 @@ export class DashboardPanel {
 		};
 	}
 
+	public static resetForTests(): void {
+		DashboardPanel.currentPanel?.dispose();
+		DashboardPanel.currentPanel = undefined;
+		DashboardPanel.panelCreateCount = 0;
+	}
+
 	private constructor(
 		panel: vscode.WebviewPanel,
 		extensionUri: vscode.Uri,
