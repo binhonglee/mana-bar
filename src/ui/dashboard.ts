@@ -279,31 +279,33 @@ export class DashboardPanel {
 			<section class="settings-section">
 				<h2 class="section-title">Display</h2>
 				<p class="section-desc">Choose whether quota values show what you have used or what you have left.</p>
-				<div class="setting-card">
-					<div class="setting-row">
-						<div class="setting-info">
-							<span class="setting-label">Quota display</span>
-							<span class="setting-hint">This affects the dashboard, sidebar, and status bar.</span>
-						</div>
-						<div class="select-group">
-							<select id="display-mode-select" class="setting-select">
-								<option value="used">Used</option>
-								<option value="remaining">Remaining</option>
-							</select>
+				<div class="services-grid">
+					<div class="setting-card">
+						<div class="setting-row">
+							<div class="setting-info">
+								<span class="setting-label">Quota display</span>
+								<span class="setting-hint">This affects the dashboard, sidebar, and status bar.</span>
+							</div>
+							<div class="select-group">
+								<select id="display-mode-select" class="setting-select">
+									<option value="used">Used</option>
+									<option value="remaining">Remaining</option>
+								</select>
+							</div>
 						</div>
 					</div>
-				</div>
-				<div class="setting-card">
-					<div class="setting-row">
-						<div class="setting-info">
-							<span class="setting-label">Status bar hover</span>
-							<span class="setting-hint">Choose between the regular layout and the fixed-width monospaced layout.</span>
-						</div>
-						<div class="select-group">
-							<select id="status-bar-tooltip-layout-select" class="setting-select">
-								<option value="regular">Regular</option>
-								<option value="monospaced">Monospaced</option>
-							</select>
+					<div class="setting-card">
+						<div class="setting-row">
+							<div class="setting-info">
+								<span class="setting-label">Status bar hover</span>
+								<span class="setting-hint">Choose between the regular layout and the fixed-width monospaced layout.</span>
+							</div>
+							<div class="select-group">
+								<select id="status-bar-tooltip-layout-select" class="setting-select">
+									<option value="regular">Regular</option>
+									<option value="monospaced">Monospaced</option>
+								</select>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -311,15 +313,17 @@ export class DashboardPanel {
 			<section class="settings-section">
 				<h2 class="section-title">Polling</h2>
 				<p class="section-desc">How often to refresh usage data from services.</p>
-				<div class="setting-card">
-					<div class="setting-row">
-						<div class="setting-info">
-							<span class="setting-label">Refresh interval</span>
-							<span class="setting-hint">Lower values increase responsiveness but may cause more API calls.</span>
-						</div>
-						<div class="slider-group">
-							<input type="range" id="polling-slider" min="10" max="300" step="5" value="60">
-							<span id="polling-value" class="slider-value">60s</span>
+				<div class="services-grid">
+					<div class="setting-card">
+						<div class="setting-row">
+							<div class="setting-info">
+								<span class="setting-label">Refresh interval</span>
+								<span class="setting-hint">Lower values increase responsiveness but may cause more API calls.</span>
+							</div>
+							<div class="slider-group">
+								<input type="range" id="polling-slider" min="10" max="300" step="5" value="60">
+								<span id="polling-value" class="slider-value">60s</span>
+							</div>
 						</div>
 					</div>
 				</div>

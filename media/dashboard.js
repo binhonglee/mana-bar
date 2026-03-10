@@ -597,10 +597,10 @@
 		if (!container) return;
 
 		const services = [
-			{ key: 'claudeCode', name: 'Claude Code', desc: 'Anthropic API usage' },
+			{ key: 'antigravity', name: 'Antigravity', desc: 'Google Antigravity usage' },
+			{ key: 'claudeCode', name: 'Claude Code', desc: 'Claude Code usage' },
 			{ key: 'codex', name: 'Codex', desc: 'OpenAI Codex CLI usage' },
-			{ key: 'antigravity', name: 'Antigravity', desc: 'Google Cloud Code quota' },
-			{ key: 'gemini', name: 'Gemini', desc: 'Gemini CLI usage' },
+			{ key: 'gemini', name: 'Gemini CLI', desc: 'Google Gemini CLI usage' },
 		];
 
 		container.innerHTML = services.map(svc => {
