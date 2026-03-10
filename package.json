@@ -1,0 +1,114 @@
+{
+  "name": "llm-usage-tracker",
+  "displayName": "LLM Usage Tracker",
+  "description": "Track usage limits across multiple LLM services (Claude Code, Codex, Antigravity, Gemini)",
+  "version": "0.0.1",
+  "publisher": "llm-usage-tracker",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "llmUsageTracker.refresh",
+        "title": "Refresh Usage Data",
+        "category": "LLM Usage"
+      },
+      {
+        "command": "llmUsageTracker.openSettings",
+        "title": "Open Dashboard",
+        "category": "LLM Usage"
+      },
+      {
+        "command": "llmUsageTracker.openDashboard",
+        "title": "Open Dashboard",
+        "category": "LLM Usage"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "llmUsageTracker",
+          "title": "LLM Usage",
+          "icon": "$(graph)"
+        }
+      ]
+    },
+    "views": {
+      "llmUsageTracker": [
+        {
+          "id": "llmUsageTrackerSidebar",
+          "name": "Usage Overview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "LLM Usage Tracker",
+      "properties": {
+        "llmUsageTracker.pollingInterval": {
+          "type": "number",
+          "default": 60,
+          "minimum": 10,
+          "maximum": 300,
+          "description": "Polling interval in seconds (10s - 5min)"
+        },
+        "llmUsageTracker.displayMode": {
+          "type": "string",
+          "enum": [
+            "used",
+            "remaining"
+          ],
+          "enumDescriptions": [
+            "Show how much quota has been used.",
+            "Show how much quota is left."
+          ],
+          "default": "used",
+          "description": "Whether quota values are displayed as used or remaining."
+        },
+        "llmUsageTracker.hiddenServices": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "List of service names hidden from sidebar and status bar"
+        },
+        "llmUsageTracker.services": {
+          "type": "object",
+          "default": {
+            "claudeCode": {
+              "enabled": true
+            },
+            "codex": {
+              "enabled": false
+            },
+            "antigravity": {
+              "enabled": true
+            },
+            "gemini": {
+              "enabled": false
+            }
+          },
+          "description": "Service configuration"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "@types/vscode": "^1.109.0",
+    "@vscode/vsce": "^3.7.1",
+    "typescript": "^5.9.3"
+  }
+}
