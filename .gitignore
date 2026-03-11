@@ -1,6 +1,7 @@
 node_modules/
 out/
 out-test/
+media/dashboard.js
 *.vsix
 .vscode-test/
 .DS_Store

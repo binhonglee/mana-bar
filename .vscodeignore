@@ -1,0 +1,35 @@
+.vscode/**
+.vscode-test/**
+.github/**
+.claude/**
+.gitignore
+.prettierrc
+.eslintrc.json
+tsconfig.json
+tsconfig.webview.json
+vitest.config.ts
+playwright.config.ts
+package-lock.json
+*.vsix
+
+# Source code
+src/**
+tests/**
+
+# Test artifacts
+coverage/**
+test-results/**
+playwright-report/**
+out-test/**
+
+# Production artifacts cleanup
+out/testing/**
+out/**/*.map
+media/*.ts
+
+# Project docs and misc
+README.md
+CHANGELOG.md
+vsls.json
+.DS_Store
+**/.DS_Store

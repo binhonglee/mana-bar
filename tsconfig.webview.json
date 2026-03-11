@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "none",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "types": [],
+    "skipLibCheck": true,
+    "removeComments": false,
+    "sourceMap": false,
+    "outFile": "media/dashboard.js"
+  },
+  "files": [
+    "src/webview/dashboard.ts"
+  ]
+}

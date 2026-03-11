@@ -5,7 +5,11 @@
   "version": "0.0.1",
   "publisher": "binhonglee",
   "engines": {
-    "vscode": "^1.82.0"
+    "vscode": "^1.93.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/binhonglee/mana-bar.git"
   },
   "categories": [
     "Other"
@@ -125,27 +129,29 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "build:webview": "tsc -p tsconfig.webview.json",
+    "compile": "tsc -p ./ && npm run build:webview",
+    "watch:webview": "tsc -watch -p tsconfig.webview.json",
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "playwright:install": "playwright install chromium",
     "build:test-e2e": "tsc -p tests/e2e/tsconfig.json",
     "test": "npm run test:unit",
     "test:unit": "vitest run --config vitest.config.ts --coverage",
-    "test:browser": "playwright test --config playwright.config.ts",
+    "test:browser": "npm run build:webview && playwright test --config playwright.config.ts",
     "test:e2e": "npm run build:test-e2e && node out-test/e2e/run-tests.js",
     "test:all": "npm run test:unit && npm run test:browser && npm run test:e2e",
     "test:ci": "npm run compile && npm run test:unit && npm run test:browser && npm run test:e2e"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
-    "@types/node": "^25.4.0",
-    "@types/vscode": "^1.109.0",
-    "@vitest/coverage-v8": "^3.2.4",
-    "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.7.1",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "@playwright/test": "1.58.2",
+    "@types/node": "25.4.0",
+    "@types/vscode": "1.93.0",
+    "@vitest/coverage-v8": "3.2.4",
+    "@vscode/test-electron": "2.5.2",
+    "@vscode/vsce": "3.7.1",
+    "tsx": "4.20.5",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   }
 }

@@ -13,5 +13,5 @@
     "moduleResolution": "Node16"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", ".vscode-test", "out", "out-test", "tests", "vitest.config.ts", "playwright.config.ts"]
+  "exclude": ["node_modules", ".vscode-test", "out", "out-test", "tests", "src/webview", "vitest.config.ts", "playwright.config.ts"]
 }
