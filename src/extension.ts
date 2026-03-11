@@ -1,48 +1,49 @@
 import * as vscode from 'vscode';
 import { ConfigManager } from './managers/config-manager';
 import { UsageManager } from './managers/usage-manager';
-import { ClaudeCodeProvider } from './providers/claude-code';
-import { CodexProvider } from './providers/codex';
-import { AntigravityProvider } from './providers/antigravity';
-import { GeminiProvider } from './providers/gemini';
 import { StatusBarController } from './ui/status-bar';
 import { SidebarProvider } from './ui/sidebar';
 import { DashboardPanel, DashboardSerializer } from './ui/dashboard';
+import { registerUsageProviders } from './provider-registration';
+import { UsageData } from './types';
 
 let usageManager: UsageManager | undefined;
+const TEST_MODE_ENV = 'LLM_USAGE_TRACKER_TEST_MODE';
+
+function serializeUsageDataForSnapshot(data: UsageData) {
+	return {
+		serviceName: data.serviceName,
+		totalUsed: data.totalUsed,
+		totalLimit: data.totalLimit,
+		resetTime: data.resetTime?.toISOString(),
+		progressSegments: data.progressSegments,
+		quotaWindows: data.quotaWindows?.map(window => ({
+			label: window.label,
+			used: window.used,
+			limit: window.limit,
+			resetTime: window.resetTime?.toISOString(),
+		})),
+		models: data.models?.map(model => ({
+			modelName: model.modelName,
+			used: model.used,
+			limit: model.limit,
+			resetTime: model.resetTime?.toISOString(),
+		})),
+		lastUpdated: data.lastUpdated.toISOString(),
+	};
+}
 
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('LLM Usage Tracker is now active');
+	const isTestMode = process.env[TEST_MODE_ENV] === '1';
 
 	// Initialize managers
 	const configManager = new ConfigManager();
 	usageManager = new UsageManager(configManager);
 
-	// Register providers
-	const claudeCodeProvider = new ClaudeCodeProvider();
-	usageManager.registerProvider(claudeCodeProvider);
-
-	const codexProvider = new CodexProvider(context);
-	usageManager.registerProvider(codexProvider);
-
-	// Register Antigravity provider and discover quota groups
-	const antigravityProvider = new AntigravityProvider(context);
-	try {
-		await antigravityProvider.discoverQuotaGroups((provider) => {
-			usageManager?.registerProvider(provider);
-		});
-	} catch (error) {
-		console.error('[Antigravity] Discovery failed:', error);
-	}
-
-	const geminiProvider = new GeminiProvider();
-	try {
-		await geminiProvider.discoverQuotaGroups((provider) => {
-			usageManager?.registerProvider(provider);
-		});
-	} catch (error) {
-		console.error('[Gemini] Discovery failed:', error);
-	}
+	const providerRegistration = await registerUsageProviders(usageManager, context, {
+		testMode: isTestMode,
+	});
 
 	// Initialize UI components
 	const statusBar = new StatusBarController(usageManager, configManager);
@@ -55,6 +56,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Register commands
 	const refreshCommand = vscode.commands.registerCommand('llmUsageTracker.refresh', async () => {
+		providerRegistration.testHarness?.advanceScenario();
 		vscode.window.showInformationMessage('Refreshing usage data...');
 		await usageManager?.refreshAll();
 		vscode.window.showInformationMessage('Usage data refreshed');
@@ -67,6 +69,16 @@ export async function activate(context: vscode.ExtensionContext) {
 	const dashboardCommand = vscode.commands.registerCommand('llmUsageTracker.openDashboard', () => {
 		DashboardPanel.createOrShow(context.extensionUri, usageManager!, configManager);
 	});
+
+	const testSnapshotCommand = isTestMode
+		? vscode.commands.registerCommand('llmUsageTracker.__test.getSnapshot', async () => ({
+			providerNames: usageManager?.getRegisteredServiceNames() ?? [],
+			usageData: (usageManager?.getAllUsageData() ?? []).map(serializeUsageDataForSnapshot),
+			displayMode: configManager.getDisplayMode(),
+			dashboard: DashboardPanel.getDebugState(),
+			scenarioIndex: providerRegistration.testHarness?.getScenarioIndex() ?? 0,
+		}))
+		: undefined;
 
 	// Start polling
 	usageManager.startPolling();
@@ -85,6 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		refreshCommand,
 		settingsCommand,
 		dashboardCommand,
+		...(testSnapshotCommand ? [testSnapshotCommand] : []),
 		serializer,
 		usageManager,
 		configManager.onConfigChange(() => {
