@@ -11,7 +11,7 @@ async function main() {
 		extensionTestsPath,
 		launchArgs: [workspacePath, '--disable-extensions'],
 		extensionTestsEnv: {
-			LLM_USAGE_TRACKER_TEST_MODE: '1',
+			MANA_BAR_TEST_MODE: '1',
 		},
 	});
 }

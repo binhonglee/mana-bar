@@ -4,10 +4,10 @@ import { activate, deactivate } from '../../src/extension';
 import { DashboardPanel } from '../../src/ui/dashboard';
 
 describe('extension activation', () => {
-	const originalTestMode = process.env.LLM_USAGE_TRACKER_TEST_MODE;
+	const originalTestMode = process.env.MANA_BAR_TEST_MODE;
 
 	beforeEach(() => {
-		process.env.LLM_USAGE_TRACKER_TEST_MODE = '1';
+		process.env.MANA_BAR_TEST_MODE = '1';
 		(vscode as any).__testing.reset();
 		DashboardPanel.resetForTests();
 		vi.useFakeTimers();
@@ -17,7 +17,7 @@ describe('extension activation', () => {
 	afterEach(() => {
 		deactivate();
 		DashboardPanel.resetForTests();
-		process.env.LLM_USAGE_TRACKER_TEST_MODE = originalTestMode;
+		process.env.MANA_BAR_TEST_MODE = originalTestMode;
 		vi.useRealTimers();
 		vi.restoreAllMocks();
 	});
@@ -35,25 +35,25 @@ describe('extension activation', () => {
 		const stopPollingSpy = vi.spyOn((await import('../../src/managers/usage-manager')).UsageManager.prototype, 'stopPolling');
 
 		await activate(context);
-		await vscode.workspace.getConfiguration('llmUsageTracker').update('services', {
+		await vscode.workspace.getConfiguration('manaBar').update('services', {
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
 			vscodeCopilot: { enabled: false },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		}, vscode.ConfigurationTarget.Global);
-		await vscode.commands.executeCommand('llmUsageTracker.refresh');
-		await vscode.commands.executeCommand('llmUsageTracker.openDashboard');
-		await vscode.commands.executeCommand('llmUsageTracker.openDashboard');
-		await vscode.workspace.getConfiguration('llmUsageTracker').update('displayMode', 'remaining', vscode.ConfigurationTarget.Global);
+		await vscode.commands.executeCommand('manaBar.refresh');
+		await vscode.commands.executeCommand('manaBar.openDashboard');
+		await vscode.commands.executeCommand('manaBar.openDashboard');
+		await vscode.workspace.getConfiguration('manaBar').update('displayMode', 'remaining', vscode.ConfigurationTarget.Global);
 
-		const snapshot = await vscode.commands.executeCommand<any>('llmUsageTracker.__test.getSnapshot');
+		const snapshot = await vscode.commands.executeCommand<any>('manaBar.__test.getSnapshot');
 
 		expect((vscode as any).__testing.getRegisteredCommands()).toEqual([
-			'llmUsageTracker.refresh',
-			'llmUsageTracker.openSettings',
-			'llmUsageTracker.openDashboard',
-			'llmUsageTracker.__test.getSnapshot',
+			'manaBar.refresh',
+			'manaBar.openSettings',
+			'manaBar.openDashboard',
+			'manaBar.__test.getSnapshot',
 		]);
 		expect(snapshot.providerNames).toEqual([
 			'Antigravity Gemini Flash',
@@ -69,7 +69,7 @@ describe('extension activation', () => {
 		});
 		expect(snapshot.displayMode).toBe('remaining');
 		expect((vscode as any).__testing.getCreatedTreeViews()).toHaveLength(1);
-		expect((vscode as any).__testing.getRegisteredSerializer('llmUsageTracker.dashboard')).toBeTruthy();
+		expect((vscode as any).__testing.getRegisteredSerializer('manaBar.dashboard')).toBeTruthy();
 		expect((vscode as any).__testing.getInformationMessages()).toEqual([
 			'Refreshing usage data...',
 			'Usage data refreshed',

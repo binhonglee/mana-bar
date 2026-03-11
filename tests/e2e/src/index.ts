@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-const EXTENSION_ID = 'llm-usage-tracker.llm-usage-tracker';
+const EXTENSION_ID = 'binhonglee.mana-bar';
 
 interface Snapshot {
 	providerNames: string[];
@@ -38,13 +38,13 @@ async function waitFor<T>(
 }
 
 async function getSnapshot(): Promise<Snapshot> {
-	const snapshot = await vscode.commands.executeCommand<Snapshot>('llmUsageTracker.__test.getSnapshot');
+	const snapshot = await vscode.commands.executeCommand<Snapshot>('manaBar.__test.getSnapshot');
 	assert.ok(snapshot, 'expected test snapshot command to return data');
 	return snapshot;
 }
 
 async function updateConfig(key: string, value: unknown): Promise<void> {
-	await vscode.workspace.getConfiguration('llmUsageTracker').update(
+	await vscode.workspace.getConfiguration('manaBar').update(
 		key,
 		value,
 		vscode.ConfigurationTarget.Global
@@ -104,7 +104,7 @@ async function testRefreshAdvancesFakeScenario() {
 	);
 	assert.strictEqual(initial.usageData.find(item => item.serviceName === 'Claude Code')?.totalUsed, 42);
 
-	await vscode.commands.executeCommand('llmUsageTracker.refresh');
+	await vscode.commands.executeCommand('manaBar.refresh');
 
 	const refreshed = await waitFor(
 		'refreshed usage data',
@@ -116,8 +116,8 @@ async function testRefreshAdvancesFakeScenario() {
 }
 
 async function testDashboardReuse() {
-	await vscode.commands.executeCommand('llmUsageTracker.openDashboard');
-	await vscode.commands.executeCommand('llmUsageTracker.openDashboard');
+	await vscode.commands.executeCommand('manaBar.openDashboard');
+	await vscode.commands.executeCommand('manaBar.openDashboard');
 
 	const snapshot = await waitFor(
 		'dashboard open state',
