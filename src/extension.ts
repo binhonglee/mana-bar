@@ -6,6 +6,7 @@ import { SidebarProvider } from './ui/sidebar';
 import { DashboardPanel, DashboardSerializer } from './ui/dashboard';
 import { registerUsageProviders } from './provider-registration';
 import { UsageData } from './types';
+import { debugLog, setDebugLoggingEnabled } from './logger';
 
 let usageManager: UsageManager | undefined;
 const TEST_MODE_ENV = 'MANA_BAR_TEST_MODE';
@@ -34,11 +35,13 @@ function serializeUsageDataForSnapshot(data: UsageData) {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-	console.log('mana.bar is now active');
+	const configManager = new ConfigManager();
+	setDebugLoggingEnabled(configManager.getDebugLogs());
+	debugLog('mana.bar is now active');
+
 	const isTestMode = process.env[TEST_MODE_ENV] === '1';
 
 	// Initialize managers
-	const configManager = new ConfigManager();
 	usageManager = new UsageManager(configManager);
 
 	const providerRegistration = await registerUsageProviders(usageManager, context, {
@@ -101,13 +104,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		serializer,
 		usageManager,
 		configManager.onConfigChange(() => {
+			setDebugLoggingEnabled(configManager.getDebugLogs());
 			// Restart polling when config changes
 			usageManager?.stopPolling();
 			usageManager?.startPolling();
 		})
 	);
 
-	console.log('mana.bar initialized successfully');
+	debugLog('mana.bar initialized successfully');
 }
 
 export function deactivate() {

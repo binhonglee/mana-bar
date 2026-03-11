@@ -18,10 +18,12 @@ function createConfigManager() {
 	return {
 		getDisplayMode: () => 'used' as const,
 		getStatusBarTooltipLayout: () => 'regular' as const,
+		getDebugLogs: () => false,
 		getPollingInterval: () => 60,
 		getServicesConfig: () => ({
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
+			vscodeCopilot: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		}),
@@ -29,6 +31,7 @@ function createConfigManager() {
 		updateServiceConfig: vi.fn(async () => undefined),
 		updateDisplayMode: vi.fn(async () => undefined),
 		updateStatusBarTooltipLayout: vi.fn(async () => undefined),
+		updateDebugLogs: vi.fn(async () => undefined),
 		toggleHideService: vi.fn(async () => undefined),
 		onConfigChange: (callback: () => void) => emitter.event(callback),
 		fireChange: () => emitter.fire(),
@@ -85,6 +88,7 @@ describe('DashboardPanel', () => {
 		(vscode as any).__testing.dispatchWebviewMessage(panel, { type: 'setPollingInterval', interval: 120 });
 		(vscode as any).__testing.dispatchWebviewMessage(panel, { type: 'setDisplayMode', mode: 'remaining' });
 		(vscode as any).__testing.dispatchWebviewMessage(panel, { type: 'setStatusBarTooltipLayout', layout: 'monospaced' });
+		(vscode as any).__testing.dispatchWebviewMessage(panel, { type: 'setDebugLogs', enabled: true });
 		(vscode as any).__testing.dispatchWebviewMessage(panel, { type: 'toggleHideService', service: 'Codex' });
 
 		expect(panel.webview.postedMessages).toEqual([
@@ -96,6 +100,7 @@ describe('DashboardPanel', () => {
 		expect((vscode as any).__testing.getConfiguration('manaBar', 'pollingInterval')).toBe(120);
 		expect(configManager.updateDisplayMode).toHaveBeenCalledWith('remaining');
 		expect(configManager.updateStatusBarTooltipLayout).toHaveBeenCalledWith('monospaced');
+		expect(configManager.updateDebugLogs).toHaveBeenCalledWith(true);
 		expect(configManager.toggleHideService).toHaveBeenCalledWith('Codex');
 	});
 

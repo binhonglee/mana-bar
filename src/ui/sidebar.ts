@@ -74,7 +74,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 	 * Get top-level service items
 	 */
 	private getServices(): UsageTreeItem[] {
-		const displayMode = this.configManager?.getDisplayMode() ?? 'used';
+		const displayMode = this.configManager?.getDisplayMode() ?? 'remaining';
 		const hidden = this.configManager?.getHiddenServices() ?? [];
 		const allUsage = this.usageManager.getAllUsageData()
 			.filter(u => !hidden.includes(u.serviceName));

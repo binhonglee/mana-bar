@@ -44,6 +44,7 @@
 		setupGoSettingsButton();
 		setupDisplayModeSelect();
 		setupStatusBarTooltipLayoutSelect();
+		setupDebugLogsToggle();
 		setupPollingSlider();
 
 		// Render from persisted state if available
@@ -176,6 +177,18 @@
 		});
 	}
 
+	function setupDebugLogsToggle() {
+		const toggle = document.getElementById('debug-logs-toggle');
+		if (!toggle) return;
+
+		toggle.addEventListener('change', () => {
+			vscode.postMessage({
+				type: 'setDebugLogs',
+				enabled: toggle.checked,
+			});
+		});
+	}
+
 	// ============ Last Updated ============
 
 
@@ -186,7 +199,7 @@
 	}
 
 	function getDisplayMode() {
-		return state.config?.displayMode || 'used';
+		return state.config?.displayMode || 'remaining';
 	}
 
 	function isServiceHidden(serviceName) {
@@ -634,12 +647,17 @@
 
 		const displayModeSelect = document.getElementById('display-mode-select');
 		if (displayModeSelect) {
-			displayModeSelect.value = state.config.displayMode || 'used';
+			displayModeSelect.value = state.config.displayMode || 'remaining';
 		}
 
 		const statusBarTooltipLayoutSelect = document.getElementById('status-bar-tooltip-layout-select');
 		if (statusBarTooltipLayoutSelect) {
 			statusBarTooltipLayoutSelect.value = state.config.statusBarTooltipLayout || 'regular';
+		}
+
+		const debugLogsToggle = document.getElementById('debug-logs-toggle');
+		if (debugLogsToggle) {
+			debugLogsToggle.checked = Boolean(state.config.debugLogs);
 		}
 	}
 

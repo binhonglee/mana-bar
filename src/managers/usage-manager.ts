@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { UsageProvider } from '../providers/base';
 import { UsageData } from '../types';
 import { ConfigManager } from './config-manager';
+import { debugLog } from '../logger';
 
 /**
  * Cache entry with expiration
@@ -97,7 +98,7 @@ export class UsageManager {
 	 */
 	async refreshAll(): Promise<void> {
 		const servicesConfig = this.configManager.getServicesConfig();
-		console.log('[UsageManager] Refreshing all providers, config:', servicesConfig);
+		debugLog('[UsageManager] Refreshing all providers, config:', servicesConfig);
 		const promises: Promise<void>[] = [];
 
 		for (const [serviceName, provider] of this.providers) {
@@ -105,18 +106,18 @@ export class UsageManager {
 			const configKey = getServiceConfigKey(serviceName);
 			const serviceConfig = servicesConfig[configKey];
 
-			console.log(`[UsageManager] Checking ${serviceName}: enabled=${serviceConfig?.enabled}`);
+			debugLog(`[UsageManager] Checking ${serviceName}: enabled=${serviceConfig?.enabled}`);
 
 			// Skip if disabled or not configured
 			if (!serviceConfig?.enabled) {
-				console.log(`[UsageManager] ${serviceName} is disabled, skipping`);
+				debugLog(`[UsageManager] ${serviceName} is disabled, skipping`);
 				this.cache.delete(serviceName);
 				continue;
 			}
 
 			// Check if available
 			const isAvailable = await provider.isAvailable();
-			console.log(`[UsageManager] ${serviceName} isAvailable: ${isAvailable}`);
+			debugLog(`[UsageManager] ${serviceName} isAvailable: ${isAvailable}`);
 			if (!isAvailable) {
 				this.cache.delete(serviceName);
 				continue;
@@ -125,7 +126,7 @@ export class UsageManager {
 			// Fetch usage data
 			promises.push(
 				provider.getUsage().then((data) => {
-					console.log(`[UsageManager] ${serviceName} returned data:`, data);
+					debugLog(`[UsageManager] ${serviceName} returned data:`, data);
 					if (data) {
 						this.updateCache(serviceName, data);
 					} else {
@@ -138,7 +139,7 @@ export class UsageManager {
 		}
 
 		await Promise.all(promises);
-		console.log('[UsageManager] All providers refreshed, cache:', this.getAllUsageData());
+		debugLog('[UsageManager] All providers refreshed, cache:', this.getAllUsageData());
 		this._onDidUpdateUsage.fire();
 	}
 

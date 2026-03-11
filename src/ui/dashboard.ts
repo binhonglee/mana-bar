@@ -179,6 +179,7 @@ export class DashboardPanel {
 			config: {
 				displayMode: this._configManager.getDisplayMode(),
 				statusBarTooltipLayout: this._configManager.getStatusBarTooltipLayout(),
+				debugLogs: this._configManager.getDebugLogs(),
 				pollingInterval: this._configManager.getPollingInterval(),
 				services: this._configManager.getServicesConfig(),
 				hiddenServices: this._configManager.getHiddenServices(),
@@ -211,6 +212,9 @@ export class DashboardPanel {
 				break;
 			case 'setStatusBarTooltipLayout':
 				this._configManager.updateStatusBarTooltipLayout(message.layout);
+				break;
+			case 'setDebugLogs':
+				this._configManager.updateDebugLogs(Boolean(message.enabled));
 				break;
 			case 'toggleHideService':
 				this._configManager.toggleHideService(message.service);
@@ -313,6 +317,18 @@ export class DashboardPanel {
 									<option value="monospaced">Monospaced</option>
 								</select>
 							</div>
+						</div>
+					</div>
+					<div class="setting-card">
+						<div class="setting-row">
+							<div class="setting-info">
+								<span class="setting-label">Debug logging</span>
+								<span class="setting-hint">Only turn this on when you want verbose provider diagnostics in the extension host console.</span>
+							</div>
+							<label class="toggle-switch">
+								<input type="checkbox" id="debug-logs-toggle">
+								<span class="toggle-slider"></span>
+							</label>
 						</div>
 					</div>
 				</div>

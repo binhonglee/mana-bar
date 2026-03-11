@@ -13,6 +13,7 @@ describe('ConfigManager', () => {
 		expect(manager.getPollingInterval()).toBe(120);
 		expect(manager.getDisplayMode()).toBe('remaining');
 		expect(manager.getStatusBarTooltipLayout()).toBe('regular');
+		expect(manager.getDebugLogs()).toBe(false);
 		expect(manager.getServicesConfig()).toEqual({
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
@@ -30,6 +31,7 @@ describe('ConfigManager', () => {
 		await manager.updateServiceConfig('vscodeCopilot', { enabled: true });
 		await manager.updateDisplayMode('remaining');
 		await manager.updateStatusBarTooltipLayout('monospaced');
+		await manager.updateDebugLogs(true);
 		await manager.toggleHideService('Codex');
 		await manager.toggleHideService('Codex');
 		await manager.toggleHideService('Claude Code');
@@ -43,6 +45,7 @@ describe('ConfigManager', () => {
 		});
 		expect(manager.getDisplayMode()).toBe('remaining');
 		expect(manager.getStatusBarTooltipLayout()).toBe('monospaced');
+		expect(manager.getDebugLogs()).toBe(true);
 		expect(manager.getHiddenServices()).toEqual(['Claude Code']);
 	});
 

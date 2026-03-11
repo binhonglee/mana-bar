@@ -29,6 +29,10 @@ export class ConfigManager {
 		return this.getConfig().get<StatusBarTooltipLayout>('statusBarTooltipLayout', 'regular');
 	}
 
+	getDebugLogs(): boolean {
+		return this.getConfig().get<boolean>('debugLogs', false);
+	}
+
 	/**
 	 * Get services configuration
 	 */
@@ -65,6 +69,10 @@ export class ConfigManager {
 
 	async updateStatusBarTooltipLayout(layout: StatusBarTooltipLayout): Promise<void> {
 		await this.getConfig().update('statusBarTooltipLayout', layout, vscode.ConfigurationTarget.Global);
+	}
+
+	async updateDebugLogs(enabled: boolean): Promise<void> {
+		await this.getConfig().update('debugLogs', enabled, vscode.ConfigurationTarget.Global);
 	}
 
 	/**

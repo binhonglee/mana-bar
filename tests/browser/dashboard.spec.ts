@@ -44,6 +44,7 @@ const usageData = [
 const config = {
 	displayMode: 'used',
 	statusBarTooltipLayout: 'regular',
+	debugLogs: false,
 	pollingInterval: 60,
 	hiddenServices: [],
 	services: {
@@ -268,6 +269,10 @@ test('posts hide and settings actions back through the vscode bridge', async ({ 
 	await page.click('.tab[data-tab="settings"]');
 	await page.selectOption('#display-mode-select', 'remaining');
 	await page.selectOption('#status-bar-tooltip-layout-select', 'monospaced');
+	await page.locator('#debug-logs-toggle').evaluate((element: HTMLInputElement) => {
+		element.checked = true;
+		element.dispatchEvent(new Event('change', { bubbles: true }));
+	});
 	await page.locator('input[data-service="gemini"]').evaluate((element: HTMLInputElement) => {
 		element.checked = false;
 		element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -283,6 +288,7 @@ test('posts hide and settings actions back through the vscode bridge', async ({ 
 		{ type: 'toggleHideService', service: 'Gemini CLI 2.5 Pro' },
 		{ type: 'setDisplayMode', mode: 'remaining' },
 		{ type: 'setStatusBarTooltipLayout', layout: 'monospaced' },
+		{ type: 'setDebugLogs', enabled: true },
 		{ type: 'toggleService', service: 'gemini', enabled: false },
 		{ type: 'setPollingInterval', interval: 120 },
 	]);
@@ -292,6 +298,7 @@ test('renders the VSCode Copilot toggle in settings', async ({ page }) => {
 	await pushState(page);
 	await page.click('.tab[data-tab="settings"]');
 
-	await expect(page.locator('input[data-service="copilot"]')).toHaveCount(1);
+	await expect(page.locator('input[data-service="vscodeCopilot"]')).toHaveCount(1);
 	await expect(page.locator('.service-toggle-card')).toContainText(['VSCode Copilot']);
+	await expect(page.locator('#debug-logs-toggle')).toHaveCount(1);
 });

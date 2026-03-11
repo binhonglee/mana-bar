@@ -34,7 +34,7 @@ export class StatusBarController {
 	 * Update the status bar display
 	 */
 	private update(): void {
-		const displayMode = this.configManager?.getDisplayMode() ?? 'used';
+		const displayMode = this.configManager?.getDisplayMode() ?? 'remaining';
 		const hidden = this.configManager?.getHiddenServices() ?? [];
 		const allUsage = this.usageManager.getAllUsageData()
 			.filter(u => !hidden.includes(u.serviceName));

@@ -86,6 +86,11 @@
           "default": "regular",
           "description": "How the status bar hover tooltip is laid out."
         },
+        "manaBar.debugLogs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose debug logging in the extension host console."
+        },
         "manaBar.hiddenServices": {
           "type": "array",
           "items": {
@@ -103,7 +108,7 @@
             "codex": {
               "enabled": true
             },
-            "copilot": {
+            "vscodeCopilot": {
               "enabled": true
             },
             "antigravity": {
@@ -113,7 +118,7 @@
               "enabled": true
             }
           },
-          "description": "Service configuration. VSCode Copilot support logs debugging details to the extension host console."
+          "description": "Enable or disable usage tracking for each supported service."
         }
       }
     }
