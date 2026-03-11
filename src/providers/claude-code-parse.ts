@@ -66,6 +66,7 @@ export function parseClaudeUsageResponse(
 	}
 
 	return {
+		serviceId: 'claudeCode',
 		serviceName,
 		totalUsed,
 		totalLimit,

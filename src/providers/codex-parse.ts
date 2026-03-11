@@ -76,6 +76,7 @@ export function parseCodexRateLimitsResponse(
 		}));
 
 	return {
+		serviceId: 'codex',
 		serviceName,
 		totalUsed,
 		totalLimit: 100,

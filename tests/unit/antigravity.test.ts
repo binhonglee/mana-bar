@@ -157,7 +157,7 @@ describe('AntigravityProvider', () => {
 			...snapshot,
 		});
 		const registered: string[] = [];
-		const providers: Array<{ getServiceName(): string; getUsage(): Promise<unknown> }> = [];
+		const providers: Array<{ serviceId: string; getServiceName(): string; getUsage(): Promise<unknown> }> = [];
 
 		await provider.discoverQuotaGroups((usageProvider) => {
 			registered.push(usageProvider.getServiceName());
@@ -171,6 +171,7 @@ describe('AntigravityProvider', () => {
 			'Antigravity Gemini Flash',
 			'Antigravity Claude',
 		]);
+		expect(providers.map(item => item.serviceId)).toEqual(['antigravity', 'antigravity']);
 		expect(fetch).toHaveBeenCalledTimes(2);
 
 		const flashProvider = providers.find(item => item.getServiceName() === 'Antigravity Gemini Flash');

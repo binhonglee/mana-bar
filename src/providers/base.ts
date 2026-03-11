@@ -1,9 +1,11 @@
-import { UsageData } from '../types';
+import { ServiceId, UsageData } from '../types';
 
 /**
  * Abstract base class for usage providers
  */
 export abstract class UsageProvider {
+	abstract readonly serviceId: ServiceId;
+
 	/**
 	 * Get the service name (e.g., "Claude Code", "Codex")
 	 */

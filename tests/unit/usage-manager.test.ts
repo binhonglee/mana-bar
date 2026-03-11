@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { UsageManager, getServiceConfigKey } from '../../src/managers/usage-manager';
+import { UsageManager } from '../../src/managers/usage-manager';
 import { UsageProvider } from '../../src/providers/base';
-import { UsageData } from '../../src/types';
+import { ServiceId, UsageData } from '../../src/types';
 
 class FakeProvider extends UsageProvider {
+	readonly serviceId: ServiceId;
 	public disposeSpy?: () => void;
 
 	constructor(
+		serviceId: ServiceId,
 		private readonly serviceName: string,
 		private readonly usageData: UsageData,
 		private readonly available = true,
@@ -14,6 +16,7 @@ class FakeProvider extends UsageProvider {
 		private readonly error?: Error
 	) {
 		super();
+		this.serviceId = serviceId;
 	}
 
 	getServiceName(): string {
@@ -57,8 +60,9 @@ function createConfigManager(
 	} as any;
 }
 
-function usageData(serviceName: string, used: number, modelNames?: string[]): UsageData {
+function usageData(serviceId: ServiceId, serviceName: string, used: number, modelNames?: string[]): UsageData {
 	return {
+		serviceId,
 		serviceName,
 		totalUsed: used,
 		totalLimit: 100,
@@ -73,17 +77,6 @@ function usageData(serviceName: string, used: number, modelNames?: string[]): Us
 	};
 }
 
-describe('getServiceConfigKey', () => {
-	it('maps grouped service names onto config keys', () => {
-		expect(getServiceConfigKey('Claude Code')).toBe('claudeCode');
-		expect(getServiceConfigKey('Codex')).toBe('codex');
-		expect(getServiceConfigKey('VSCode Copilot')).toBe('vscodeCopilot');
-		expect(getServiceConfigKey('Antigravity Gemini Flash')).toBe('antigravity');
-		expect(getServiceConfigKey('AG Gemini Flash')).toBe('antigravity');
-		expect(getServiceConfigKey('Gemini CLI 2.5 Pro')).toBe('gemini');
-	});
-});
-
 describe('UsageManager', () => {
 	beforeEach(() => {
 		vi.spyOn(console, 'log').mockImplementation(() => { });
@@ -97,12 +90,13 @@ describe('UsageManager', () => {
 
 	it('sorts usage alphabetically and sorts model rows', async () => {
 		const manager = new UsageManager(createConfigManager());
-		manager.registerProvider(new FakeProvider('Gemini CLI 2.5 Pro', usageData('Gemini CLI 2.5 Pro', 10)));
+		manager.registerProvider(new FakeProvider('gemini', 'Gemini CLI 2.5 Pro', usageData('gemini', 'Gemini CLI 2.5 Pro', 10)));
 		manager.registerProvider(new FakeProvider(
+			'antigravity',
 			'Antigravity Gemini Flash',
-			usageData('Antigravity Gemini Flash', 40, ['Zulu', 'Alpha'])
+			usageData('antigravity', 'Antigravity Gemini Flash', 40, ['Zulu', 'Alpha'])
 		));
-		manager.registerProvider(new FakeProvider('Codex', usageData('Codex', 30)));
+		manager.registerProvider(new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30)));
 
 		await manager.refreshAll();
 
@@ -132,17 +126,19 @@ describe('UsageManager', () => {
 			gemini: false,
 		}));
 
-		manager.registerProvider(new FakeProvider('Claude Code', usageData('Claude Code', 20), true, vi.fn()));
-		manager.registerProvider(new FakeProvider('Codex', usageData('Codex', 30), false, vi.fn()));
+		manager.registerProvider(new FakeProvider('claudeCode', 'Claude Code', usageData('claudeCode', 'Claude Code', 20), true, vi.fn()));
+		manager.registerProvider(new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30), false, vi.fn()));
 		manager.registerProvider(new FakeProvider(
+			'antigravity',
 			'Antigravity Gemini Flash',
-			usageData('Antigravity Gemini Flash', 40),
+			usageData('antigravity', 'Antigravity Gemini Flash', 40),
 			true,
 			antigravitySpy
 		));
 		manager.registerProvider(new FakeProvider(
+			'gemini',
 			'Gemini CLI 2.5 Pro',
-			usageData('Gemini CLI 2.5 Pro', 10),
+			usageData('gemini', 'Gemini CLI 2.5 Pro', 10),
 			true,
 			geminiSpy
 		));
@@ -160,7 +156,7 @@ describe('UsageManager', () => {
 		const usageSpy = vi.fn();
 		const updateSpy = vi.fn();
 		const manager = new UsageManager(createConfigManager(undefined, 1));
-		manager.registerProvider(new FakeProvider('Codex', usageData('Codex', 30), true, usageSpy));
+		manager.registerProvider(new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30), true, usageSpy));
 		manager.onDidUpdateUsage(updateSpy);
 
 		manager.startPolling();
@@ -179,7 +175,7 @@ describe('UsageManager', () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-03-10T10:00:00.000Z'));
 		const manager = new UsageManager(createConfigManager(undefined, 1));
-		manager.registerProvider(new FakeProvider('Codex', usageData('Codex', 30)));
+		manager.registerProvider(new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30)));
 
 		await manager.refreshAll();
 		expect(manager.getUsageData('Codex')?.totalUsed).toBe(30);
@@ -192,12 +188,13 @@ describe('UsageManager', () => {
 	it('keeps healthy providers updating when another provider throws and disposes providers', async () => {
 		const disposeSpy = vi.fn();
 		const manager = new UsageManager(createConfigManager());
-		const healthyProvider = new FakeProvider('Codex', usageData('Codex', 30));
+		const healthyProvider = new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30));
 		healthyProvider.disposeSpy = disposeSpy;
 		manager.registerProvider(healthyProvider);
 		manager.registerProvider(new FakeProvider(
+			'claudeCode',
 			'Claude Code',
-			usageData('Claude Code', 20),
+			usageData('claudeCode', 'Claude Code', 20),
 			true,
 			undefined,
 			new Error('boom')

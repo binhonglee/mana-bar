@@ -1,11 +1,12 @@
 import { UsageProvider } from '../providers/base';
-import { UsageData } from '../types';
+import { ServiceId, UsageData } from '../types';
 import { UsageManager } from '../managers/usage-manager';
 
 type UsageFactory = () => UsageData;
 
 class FakeSequenceProvider extends UsageProvider {
 	constructor(
+		readonly serviceId: ServiceId,
 		private readonly serviceName: string,
 		private readonly usageFactories: UsageFactory[],
 		private readonly modelNames: string[],
@@ -43,9 +44,11 @@ function daysFromNow(days: number): Date {
 function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 	return [
 		new FakeSequenceProvider(
+			'antigravity',
 			'Antigravity Gemini Flash',
 			[
 				() => ({
+					serviceId: 'antigravity',
 					serviceName: 'Antigravity Gemini Flash',
 					totalUsed: 40,
 					totalLimit: 100,
@@ -58,6 +61,7 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 					lastUpdated: new Date(),
 				}),
 				() => ({
+					serviceId: 'antigravity',
 					serviceName: 'Antigravity Gemini Flash',
 					totalUsed: 60,
 					totalLimit: 100,
@@ -74,9 +78,11 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 			harness
 		),
 		new FakeSequenceProvider(
+			'claudeCode',
 			'Claude Code',
 			[
 				() => ({
+					serviceId: 'claudeCode',
 					serviceName: 'Claude Code',
 					totalUsed: 42,
 					totalLimit: 100,
@@ -89,6 +95,7 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 					lastUpdated: new Date(),
 				}),
 				() => ({
+					serviceId: 'claudeCode',
 					serviceName: 'Claude Code',
 					totalUsed: 67,
 					totalLimit: 100,
@@ -105,9 +112,11 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 			harness
 		),
 		new FakeSequenceProvider(
+			'codex',
 			'Codex',
 			[
 				() => ({
+					serviceId: 'codex',
 					serviceName: 'Codex',
 					totalUsed: 58,
 					totalLimit: 100,
@@ -120,6 +129,7 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 					lastUpdated: new Date(),
 				}),
 				() => ({
+					serviceId: 'codex',
 					serviceName: 'Codex',
 					totalUsed: 76,
 					totalLimit: 100,
@@ -136,9 +146,11 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 			harness
 		),
 		new FakeSequenceProvider(
+			'gemini',
 			'Gemini CLI 2.5 Pro',
 			[
 				() => ({
+					serviceId: 'gemini',
 					serviceName: 'Gemini CLI 2.5 Pro',
 					totalUsed: 18,
 					totalLimit: 100,
@@ -149,6 +161,7 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 					lastUpdated: new Date(),
 				}),
 				() => ({
+					serviceId: 'gemini',
 					serviceName: 'Gemini CLI 2.5 Pro',
 					totalUsed: 27,
 					totalLimit: 100,

@@ -46,7 +46,7 @@ describe('UI Extra Coverage', () => {
 	describe('StatusBarController', () => {
 		it('covers totalLimit === 0 case in update', () => {
 			mockUsageManager.getAllUsageData.mockReturnValue([
-				{ serviceName: 'Test', totalUsed: 0, totalLimit: 0 }
+				{ serviceId: 'codex', serviceName: 'Test', totalUsed: 0, totalLimit: 0, lastUpdated: new Date() }
 			]);
 			const controller = new StatusBarController(mockUsageManager, mockConfigManager);
 			// Update is called in constructor
@@ -55,7 +55,7 @@ describe('UI Extra Coverage', () => {
 
 		it('covers buildTooltipRegular without resetTime', () => {
 			mockUsageManager.getAllUsageData.mockReturnValue([
-				{ serviceName: 'Test', totalUsed: 10, totalLimit: 100 }
+				{ serviceId: 'codex', serviceName: 'Test', totalUsed: 10, totalLimit: 100, lastUpdated: new Date() }
 			]);
 			const controller = new StatusBarController(mockUsageManager, mockConfigManager);
 			// tooltip is set in update
@@ -64,9 +64,9 @@ describe('UI Extra Coverage', () => {
 		it('covers getStatusEmoji and buildTooltipMonospaced cases', () => {
 			mockConfigManager.getStatusBarTooltipLayout.mockReturnValue('monospaced');
 			mockUsageManager.getAllUsageData.mockReturnValue([
-				{ serviceName: 'Critical', totalUsed: 100, totalLimit: 100 },
-				{ serviceName: 'Warning', totalUsed: 85, totalLimit: 100 },
-				{ serviceName: 'OK', totalUsed: 10, totalLimit: 100 },
+				{ serviceId: 'codex', serviceName: 'Critical', totalUsed: 100, totalLimit: 100, lastUpdated: new Date() },
+				{ serviceId: 'codex', serviceName: 'Warning', totalUsed: 85, totalLimit: 100, lastUpdated: new Date() },
+				{ serviceId: 'codex', serviceName: 'OK', totalUsed: 10, totalLimit: 100, lastUpdated: new Date() },
 			]);
 			const controller = new StatusBarController(mockUsageManager, mockConfigManager);
 		});

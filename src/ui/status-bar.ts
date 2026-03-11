@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
-import { getUsageStatus, StatusBarTooltipLayout, UsageStatus, UsageData } from '../types';
-import { formatTimeUntilReset } from '../utils';
-import { formatUsageDisplay, getDisplayPercent } from '../usage-display';
+import { StatusBarTooltipLayout, UsageData } from '../types';
+import { buildUsageBlock, toServiceViewModel } from '../usage-display';
 
 /**
  * Manages the status bar item for displaying usage summary
@@ -50,26 +49,14 @@ export class StatusBarController {
 		const parts: string[] = [];
 
 		for (const usage of allUsage) {
-			// Use service abbreviation
-			const abbrev = this.abbreviate(usage.serviceName);
+			const viewModel = toServiceViewModel(usage, displayMode);
 
 			// Skip if no limit (means we haven't fetched quota data yet)
 			if (usage.totalLimit === 0) {
-				parts.push(`${abbrev}: --/--`);
+				parts.push(`${viewModel.shortLabel}: --/--`);
 				continue;
 			}
-
-			const status = getUsageStatus(usage.totalUsed, usage.totalLimit);
-			const statusEmoji = status === UsageStatus.CRITICAL ? '🔴' :
-				status === UsageStatus.WARNING ? '🟡' : '🟢';
-
-			// If at 100% and has reset time, show reset countdown instead of usage
-			if (status === UsageStatus.CRITICAL && usage.resetTime) {
-				const timeStr = formatTimeUntilReset(usage.resetTime);
-				parts.push(`${statusEmoji} ${abbrev}: ↻${timeStr}`);
-			} else {
-				parts.push(`${statusEmoji} ${abbrev}: ${formatUsageDisplay(usage.totalUsed, usage.totalLimit, displayMode)}`);
-			}
+			parts.push(`${viewModel.statusEmoji} ${viewModel.shortLabel}: ${viewModel.summaryText}`);
 		}
 
 		this.statusBarItem.text = `${parts.join(' • ')}`;
@@ -95,26 +82,24 @@ export class StatusBarController {
 
 	private buildTooltipRegular(allUsage: UsageData[], displayMode: 'used' | 'remaining'): string {
 		const tooltipRows = allUsage.map(usage => {
-			const status = getUsageStatus(usage.totalUsed, usage.totalLimit);
-			const statusEmoji = status === UsageStatus.CRITICAL ? '🔴' :
-				status === UsageStatus.WARNING ? '🟡' : '🟢';
-			const display = formatUsageDisplay(usage.totalUsed, usage.totalLimit, displayMode);
-			const resetStr = usage.resetTime
-				? `↻ ${formatTimeUntilReset(usage.resetTime)}`
-				: '—';
-			return `| ${statusEmoji} ${usage.serviceName} | ${display} | ${resetStr} |`;
+			const viewModel = toServiceViewModel(usage, displayMode);
+			const resetStr = viewModel.resetText ? `↻ ${viewModel.resetText}` : '—';
+			return `| ${viewModel.statusEmoji} ${usage.serviceName} | ${viewModel.displayText} | ${resetStr} |`;
 		});
 
 		return `| Service | Usage | Reset |\n|:--|:--|--:|\n${tooltipRows.join('\n')}`;
 	}
 
 	private buildTooltipMonospaced(allUsage: UsageData[], displayMode: 'used' | 'remaining'): string {
-		const rows = allUsage.map(usage => ({
-			state: this.getStatusEmoji(usage.totalUsed, usage.totalLimit),
-			service: usage.serviceName,
-			display: this.buildUsageBlock(usage.totalUsed, usage.totalLimit, displayMode),
-			reset: usage.resetTime ? `↻ ${formatTimeUntilReset(usage.resetTime)}` : '—',
-		}));
+		const rows = allUsage.map(usage => {
+			const viewModel = toServiceViewModel(usage, displayMode);
+			return {
+				state: viewModel.statusEmoji,
+				service: viewModel.serviceName,
+				display: buildUsageBlock(viewModel.displayPercent),
+				reset: viewModel.resetText ? `↻ ${viewModel.resetText}` : '—',
+			};
+		});
 
 		const stateWidth = Math.max('   '.length, ...rows.map(row => row.state.length));
 		const serviceWidth = Math.max('Service'.length, ...rows.map(row => row.service.length));
@@ -144,61 +129,6 @@ export class StatusBarController {
 
 		return `\`\`\`text\n${[header, separator, ...body].join('\n')}\n\`\`\``;
 	}
-
-	private buildUsageBlock(used: number, limit: number, displayMode: 'used' | 'remaining'): string {
-		const totalBlocks = 10;
-		const filledBlocks = Math.round(getDisplayPercent(used, limit, displayMode) / 10);
-		return '█'.repeat(filledBlocks) + '░'.repeat(totalBlocks - filledBlocks);
-	}
-
-	private getStatusEmoji(used: number, limit: number): string {
-		const status = getUsageStatus(used, limit);
-		switch (status) {
-			case UsageStatus.CRITICAL:
-				return '🔴';
-			case UsageStatus.WARNING:
-				return '🟡';
-			default:
-				return '🟢';
-		}
-	}
-
-	/**
-	 * Abbreviate service name for compact display
-	 */
-	private abbreviate(serviceName: string): string {
-		if (serviceName.startsWith('Gemini CLI ')) {
-			return this.abbreviateGemini(serviceName);
-		}
-
-		switch (serviceName) {
-			case 'Claude Code': return 'Claude';
-			case 'Codex': return 'Codex';
-			case 'Antigravity': return 'Antigravity';
-			case 'Antigravity (new)': return 'Antigravity (new)';
-			case 'Gemini': return 'Gemini';
-			case 'Gemini CLI': return 'Gemini CLI';
-			case 'Antigravity Gemini Image': return 'AG Image';
-			case 'Antigravity Gemini Pro': return 'AG Pro';
-			case 'Antigravity Gemini Flash': return 'AG Flash';
-			case 'Antigravity Claude': return 'AG Claude';
-			case 'Antigravity Default': return 'AG Default';
-			default: return serviceName.substring(0, 6);
-		}
-	}
-
-	private abbreviateGemini(serviceName: string): string {
-		const compactLabel = serviceName
-			.replace(/^Gemini CLI\s+/, '')
-			.replace(/\bFlash Lite\b/gi, 'Lite')
-			.replace(/\bPreview\b/gi, '')
-			.replace(/\bVertex\b/gi, '')
-			.replace(/\s+/g, ' ')
-			.trim();
-
-		return compactLabel ? `GCLI ${compactLabel}` : 'Gemini CLI';
-	}
-
 
 	/**
 	 * Dispose resources

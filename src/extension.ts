@@ -5,34 +5,11 @@ import { StatusBarController } from './ui/status-bar';
 import { SidebarProvider } from './ui/sidebar';
 import { DashboardPanel, DashboardSerializer } from './ui/dashboard';
 import { registerUsageProviders } from './provider-registration';
-import { UsageData } from './types';
+import { serializeUsageData } from './dashboard-serialization';
 import { debugLog, setDebugLoggingEnabled } from './logger';
 
 let usageManager: UsageManager | undefined;
 const TEST_MODE_ENV = 'MANA_BAR_TEST_MODE';
-
-function serializeUsageDataForSnapshot(data: UsageData) {
-	return {
-		serviceName: data.serviceName,
-		totalUsed: data.totalUsed,
-		totalLimit: data.totalLimit,
-		resetTime: data.resetTime?.toISOString(),
-		progressSegments: data.progressSegments,
-		quotaWindows: data.quotaWindows?.map(window => ({
-			label: window.label,
-			used: window.used,
-			limit: window.limit,
-			resetTime: window.resetTime?.toISOString(),
-		})),
-		models: data.models?.map(model => ({
-			modelName: model.modelName,
-			used: model.used,
-			limit: model.limit,
-			resetTime: model.resetTime?.toISOString(),
-		})),
-		lastUpdated: data.lastUpdated.toISOString(),
-	};
-}
 
 export async function activate(context: vscode.ExtensionContext) {
 	const configManager = new ConfigManager();
@@ -76,7 +53,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	const testSnapshotCommand = isTestMode
 		? vscode.commands.registerCommand('manaBar.__test.getSnapshot', async () => ({
 			providerNames: usageManager?.getRegisteredServiceNames() ?? [],
-			usageData: (usageManager?.getAllUsageData() ?? []).map(serializeUsageDataForSnapshot),
+			usageData: (usageManager?.getAllUsageData() ?? []).map((data) =>
+				serializeUsageData(data, configManager.getDisplayMode())
+			),
 			displayMode: configManager.getDisplayMode(),
 			dashboard: DashboardPanel.getDebugState(),
 			scenarioIndex: providerRegistration.testHarness?.getScenarioIndex() ?? 0,

@@ -5,6 +5,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { CodexRateLimitsResponse, parseCodexRateLimitsResponse } from './codex-parse';
+import { getCacheExpiry, getCachedValue, withStaleFallback } from './cache';
 import { debugLog } from '../logger';
 
 const execAsync = promisify(exec);
@@ -36,6 +37,7 @@ export interface CodexProviderDeps {
  * - Proper cleanup in dispose() to prevent process leaks
  */
 export class CodexProvider extends UsageProvider {
+	readonly serviceId = 'codex' as const;
 	private readonly CACHE_TTL = 180 * 1000; // 3 minutes
 	private readonly PID_STORAGE_KEY = 'codexAppServerPid';
 
@@ -76,12 +78,12 @@ export class CodexProvider extends UsageProvider {
 	}
 
 	async getUsage(): Promise<UsageData | null> {
-		// Return cached data if still valid
-		if (this.cachedData && this.deps.now() < this.cacheExpiry) {
-			return this.cachedData;
+		const cachedData = getCachedValue(this.cachedData, this.cacheExpiry, this.deps.now());
+		if (cachedData) {
+			return cachedData;
 		}
 
-		try {
+		return withStaleFallback(async () => {
 			// Ensure app-server is running
 			if (!this.appServerProcess) {
 				await this.spawnAppServer();
@@ -95,14 +97,13 @@ export class CodexProvider extends UsageProvider {
 			const usageData = await this.fetchRateLimits();
 			if (usageData) {
 				this.cachedData = usageData;
-				this.cacheExpiry = this.deps.now() + this.CACHE_TTL;
+				this.cacheExpiry = getCacheExpiry(this.deps.now(), this.CACHE_TTL);
 			}
 
 			return usageData;
-		} catch (error) {
+		}, this.cachedData, (error) => {
 			console.error('Failed to fetch Codex usage:', error);
-			return this.cachedData; // Return stale cache on error
-		}
+		});
 	}
 
 	async getModels(): Promise<string[]> {

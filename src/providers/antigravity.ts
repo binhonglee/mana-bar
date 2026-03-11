@@ -70,6 +70,7 @@ const GOOGLE_OAUTH_CLIENT_SECRET = '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';
  * and registers sub-providers for each group
  */
 export class AntigravityProvider extends UsageProvider {
+	readonly serviceId = 'antigravity' as const;
 	private readonly CACHE_TTL = 60 * 1000; // 60 seconds
 	private context: vscode.ExtensionContext;
 	private hasDiscovered = false;
@@ -468,6 +469,7 @@ export class AntigravityProvider extends UsageProvider {
  * Sub-provider for a specific Antigravity quota group
  */
 class AntigravityQuotaGroupProvider extends UsageProvider {
+	readonly serviceId = 'antigravity' as const;
 	constructor(
 		private groupName: string,
 		private modelsInGroup: string[],

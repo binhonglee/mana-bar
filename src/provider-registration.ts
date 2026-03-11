@@ -7,6 +7,8 @@ import { AntigravityProvider } from './providers/antigravity';
 import { GeminiProvider } from './providers/gemini';
 import { TestProviderHarness } from './testing/fake-providers';
 import { UsageProvider } from './providers/base';
+import { ServiceId } from './types';
+import { getServiceDescriptor } from './services';
 
 export interface ProviderRegistrationResult {
 	testHarness?: TestProviderHarness;
@@ -25,6 +27,48 @@ export interface ProviderRegistrationFactories {
 	createTestHarness?: () => TestProviderHarness;
 }
 
+interface StaticProviderRegistration {
+	serviceId: ServiceId;
+	mode: 'static';
+	create: (context: vscode.ExtensionContext, factories?: ProviderRegistrationFactories) => UsageProvider;
+}
+
+interface DiscoverableProviderRegistration {
+	serviceId: ServiceId;
+	mode: 'discoverable';
+	create: (context: vscode.ExtensionContext, factories?: ProviderRegistrationFactories) => DiscoverableProvider;
+}
+
+type ProviderRegistrationDescriptor = StaticProviderRegistration | DiscoverableProviderRegistration;
+
+const PROVIDER_REGISTRATIONS: ProviderRegistrationDescriptor[] = [
+	{
+		serviceId: 'claudeCode',
+		mode: 'static',
+		create: (_context, factories) => factories?.createClaudeCodeProvider?.() ?? new ClaudeCodeProvider(),
+	},
+	{
+		serviceId: 'codex',
+		mode: 'static',
+		create: (context, factories) => factories?.createCodexProvider?.(context) ?? new CodexProvider(context),
+	},
+	{
+		serviceId: 'vscodeCopilot',
+		mode: 'static',
+		create: (_context, factories) => factories?.createCopilotProvider?.() ?? new CopilotProvider(),
+	},
+	{
+		serviceId: 'antigravity',
+		mode: 'discoverable',
+		create: (context, factories) => factories?.createAntigravityProvider?.(context) ?? new AntigravityProvider(context),
+	},
+	{
+		serviceId: 'gemini',
+		mode: 'discoverable',
+		create: (_context, factories) => factories?.createGeminiProvider?.() ?? new GeminiProvider(),
+	},
+];
+
 export async function registerUsageProviders(
 	usageManager: UsageManager,
 	context: vscode.ExtensionContext,
@@ -39,31 +83,20 @@ export async function registerUsageProviders(
 		return { testHarness };
 	}
 
-	const claudeCodeProvider = options?.factories?.createClaudeCodeProvider?.() ?? new ClaudeCodeProvider();
-	usageManager.registerProvider(claudeCodeProvider);
+	for (const registration of PROVIDER_REGISTRATIONS) {
+		if (registration.mode === 'static') {
+			usageManager.registerProvider(registration.create(context, options?.factories));
+			continue;
+		}
 
-	const codexProvider = options?.factories?.createCodexProvider?.(context) ?? new CodexProvider(context);
-	usageManager.registerProvider(codexProvider);
-
-	const copilotProvider = options?.factories?.createCopilotProvider?.() ?? new CopilotProvider();
-	usageManager.registerProvider(copilotProvider);
-
-	const antigravityProvider = options?.factories?.createAntigravityProvider?.(context) ?? new AntigravityProvider(context);
-	try {
-		await antigravityProvider.discoverQuotaGroups((provider) => {
-			usageManager.registerProvider(provider);
-		});
-	} catch (error) {
-		console.error('[Antigravity] Discovery failed:', error);
-	}
-
-	const geminiProvider = options?.factories?.createGeminiProvider?.() ?? new GeminiProvider();
-	try {
-		await geminiProvider.discoverQuotaGroups((provider) => {
-			usageManager.registerProvider(provider);
-		});
-	} catch (error) {
-		console.error('[Gemini] Discovery failed:', error);
+		const discoverableProvider = registration.create(context, options?.factories);
+		try {
+			await discoverableProvider.discoverQuotaGroups((provider) => {
+				usageManager.registerProvider(provider);
+			});
+		} catch (error) {
+			console.error(`[${getServiceDescriptor(registration.serviceId).name}] Discovery failed:`, error);
+		}
 	}
 
 	return {};

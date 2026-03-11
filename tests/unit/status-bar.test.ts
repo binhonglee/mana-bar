@@ -6,6 +6,7 @@ import { UsageData } from '../../src/types';
 function createUsageData(): UsageData[] {
 	return [
 		{
+			serviceId: 'claudeCode',
 			serviceName: 'Claude Code',
 			totalUsed: 42,
 			totalLimit: 100,
@@ -99,6 +100,7 @@ describe('StatusBarController', () => {
 		const controller = new StatusBarController(
 			createUsageManager([
 				{
+					serviceId: 'gemini',
 					serviceName: 'Gemini CLI 2.5 Flash Preview Vertex',
 					totalUsed: 100,
 					totalLimit: 100,

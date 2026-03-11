@@ -1,3 +1,6 @@
+export const SERVICE_IDS = ['claudeCode', 'codex', 'vscodeCopilot', 'antigravity', 'gemini'] as const;
+export type ServiceId = typeof SERVICE_IDS[number];
+
 /**
  * Usage data for a model or service
  */
@@ -25,6 +28,7 @@ export interface QuotaWindowUsage {
  * Complete usage data for a service
  */
 export interface UsageData {
+	serviceId: ServiceId;
 	serviceName: string;
 	totalUsed: number;
 	totalLimit: number;
@@ -46,13 +50,7 @@ export interface ServiceConfig {
 /**
  * All services configuration
  */
-export interface ServicesConfig {
-	claudeCode?: ServiceConfig;
-	codex?: ServiceConfig;
-	vscodeCopilot?: ServiceConfig;
-	antigravity?: ServiceConfig;
-	gemini?: ServiceConfig;
-}
+export type ServicesConfig = Partial<Record<ServiceId, ServiceConfig>>;
 
 /**
  * Usage status for UI display

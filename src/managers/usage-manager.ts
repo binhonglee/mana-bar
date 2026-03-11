@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { UsageProvider } from '../providers/base';
-import { UsageData } from '../types';
+import { ServiceId, UsageData } from '../types';
 import { ConfigManager } from './config-manager';
 import { debugLog } from '../logger';
 
@@ -12,34 +12,17 @@ interface CacheEntry {
 	expiresAt: number;
 }
 
-export function getServiceConfigKey(serviceName: string): 'claudeCode' | 'codex' | 'vscodeCopilot' | 'antigravity' | 'gemini' {
-	const normalized = serviceName.toLowerCase().replace(/\s+/g, '');
-
-	if (serviceName.startsWith('AG ') || serviceName.startsWith('Antigravity')) {
-		return 'antigravity';
-	}
-	if (serviceName.startsWith('VSCode Copilot')) {
-		return 'vscodeCopilot';
-	}
-	if (serviceName.startsWith('Gemini')) {
-		return 'gemini';
-	}
-
-	switch (normalized) {
-		case 'claudecode': return 'claudeCode';
-		case 'codex': return 'codex';
-		case 'vscodecopilot': return 'vscodeCopilot';
-		case 'antigravity': return 'antigravity';
-		case 'gemini': return 'gemini';
-		default: return 'claudeCode';
-	}
+export interface RegisteredProvider {
+	serviceId: ServiceId;
+	serviceName: string;
+	provider: UsageProvider;
 }
 
 /**
  * Manages all usage providers, polling, and caching
  */
 export class UsageManager {
-	private providers: Map<string, UsageProvider> = new Map();
+	private providers: Map<string, RegisteredProvider> = new Map();
 	private cache: Map<string, CacheEntry> = new Map();
 	private pollingTimer: NodeJS.Timeout | null = null;
 	private _onDidUpdateUsage = new vscode.EventEmitter<void>();
@@ -62,7 +45,11 @@ export class UsageManager {
 	 */
 	registerProvider(provider: UsageProvider): void {
 		const serviceName = provider.getServiceName();
-		this.providers.set(serviceName, provider);
+		this.providers.set(serviceName, {
+			serviceId: provider.serviceId,
+			serviceName,
+			provider,
+		});
 	}
 
 	getRegisteredServiceNames(): string[] {
@@ -101,12 +88,11 @@ export class UsageManager {
 		debugLog('[UsageManager] Refreshing all providers, config:', servicesConfig);
 		const promises: Promise<void>[] = [];
 
-		for (const [serviceName, provider] of this.providers) {
-			// Map service names to config keys
-			const configKey = getServiceConfigKey(serviceName);
-			const serviceConfig = servicesConfig[configKey];
+		for (const [serviceName, registeredProvider] of this.providers) {
+			const { provider, serviceId } = registeredProvider;
+			const serviceConfig = servicesConfig[serviceId];
 
-			debugLog(`[UsageManager] Checking ${serviceName}: enabled=${serviceConfig?.enabled}`);
+			debugLog(`[UsageManager] Checking ${serviceName} (${serviceId}): enabled=${serviceConfig?.enabled}`);
 
 			// Skip if disabled or not configured
 			if (!serviceConfig?.enabled) {
@@ -199,7 +185,7 @@ export class UsageManager {
 		this._onDidUpdateUsage.dispose();
 
 		// Dispose all providers that have cleanup logic
-		for (const provider of this.providers.values()) {
+		for (const { provider } of this.providers.values()) {
 			if (provider.dispose) {
 				provider.dispose();
 			}

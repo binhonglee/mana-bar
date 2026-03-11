@@ -32,6 +32,7 @@ describe('SidebarProvider', () => {
 	it('filters hidden services from the root list', async () => {
 		const provider = new SidebarProvider(createUsageManager([
 			{
+				serviceId: 'claudeCode',
 				serviceName: 'Claude Code',
 				totalUsed: 42,
 				totalLimit: 100,
@@ -39,6 +40,7 @@ describe('SidebarProvider', () => {
 				lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
 			},
 			{
+				serviceId: 'codex',
 				serviceName: 'Codex',
 				totalUsed: 88,
 				totalLimit: 100,
@@ -59,6 +61,7 @@ describe('SidebarProvider', () => {
 
 	it('shows reset information and model rows for expanded services', async () => {
 		const usageData: UsageData[] = [{
+			serviceId: 'antigravity',
 			serviceName: 'Antigravity Gemini Flash',
 			totalUsed: 40,
 			totalLimit: 100,

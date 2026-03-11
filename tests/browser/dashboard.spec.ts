@@ -1,43 +1,49 @@
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { expect, test } from '@playwright/test';
+import { serializeUsageData } from '../../src/dashboard-serialization';
+import { getServiceDescriptors } from '../../src/services';
+import { UsageData } from '../../src/types';
 
 const HARNESS_HTML = path.resolve(__dirname, 'harness/index.html');
 
-const usageData = [
+const rawUsageData: UsageData[] = [
 	{
+		serviceId: 'antigravity',
 		serviceName: 'Antigravity Gemini Flash',
 		totalUsed: 40,
 		totalLimit: 100,
-		resetTime: '2026-03-10T12:00:00.000Z',
+		resetTime: new Date('2026-03-10T12:00:00.000Z'),
 		progressSegments: 5,
 		models: [
-			{ modelName: 'Gemini 2.5 Flash', used: 40, limit: 100, resetTime: '2026-03-10T12:00:00.000Z' },
-			{ modelName: 'Gemini 3 Flash Preview', used: 20, limit: 100, resetTime: '2026-03-10T11:30:00.000Z' },
+			{ modelName: 'Gemini 2.5 Flash', used: 40, limit: 100, resetTime: new Date('2026-03-10T12:00:00.000Z') },
+			{ modelName: 'Gemini 3 Flash Preview', used: 20, limit: 100, resetTime: new Date('2026-03-10T11:30:00.000Z') },
 		],
-		lastUpdated: '2026-03-10T10:00:00.000Z',
+		lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
 	},
 	{
+		serviceId: 'claudeCode',
 		serviceName: 'Claude Code',
 		totalUsed: 42,
 		totalLimit: 100,
-		resetTime: '2026-03-15T12:00:00.000Z',
+		resetTime: new Date('2026-03-15T12:00:00.000Z'),
 		quotaWindows: [
-			{ label: '5 Hour', used: 30, limit: 100, resetTime: '2026-03-10T12:00:00.000Z' },
-			{ label: '7 Day', used: 42, limit: 100, resetTime: '2026-03-15T12:00:00.000Z' },
+			{ label: '5 Hour', used: 30, limit: 100, resetTime: new Date('2026-03-10T12:00:00.000Z') },
+			{ label: '7 Day', used: 42, limit: 100, resetTime: new Date('2026-03-15T12:00:00.000Z') },
 		],
 		models: [],
-		lastUpdated: '2026-03-10T10:00:00.000Z',
+		lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
 	},
 	{
+		serviceId: 'gemini',
 		serviceName: 'Gemini CLI 2.5 Pro',
 		totalUsed: 18,
 		totalLimit: 100,
-		resetTime: '2026-03-10T18:00:00.000Z',
+		resetTime: new Date('2026-03-10T18:00:00.000Z'),
 		models: [
-			{ modelName: 'gemini-2.5-pro', used: 18, limit: 100, resetTime: '2026-03-10T18:00:00.000Z' },
+			{ modelName: 'gemini-2.5-pro', used: 18, limit: 100, resetTime: new Date('2026-03-10T18:00:00.000Z') },
 		],
-		lastUpdated: '2026-03-10T10:00:00.000Z',
+		lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
 	},
 ];
 
@@ -54,7 +60,19 @@ const config = {
 		antigravity: { enabled: true },
 		gemini: { enabled: true },
 	},
+	serviceDescriptors: getServiceDescriptors().map((descriptor) => ({
+		id: descriptor.id,
+		name: descriptor.name,
+		description: descriptor.description,
+	})),
 };
+
+function serializeUsageSet(
+	displayMode: 'used' | 'remaining',
+	nextUsageData: UsageData[] = rawUsageData
+) {
+	return nextUsageData.map((item) => serializeUsageData(item, displayMode));
+}
 
 async function loadHarness(page: import('@playwright/test').Page) {
 	await page.goto(pathToFileURL(HARNESS_HTML).href);
@@ -108,12 +126,12 @@ async function loadHarnessWithMockClock(page: import('@playwright/test').Page, i
 async function pushState(
 	page: import('@playwright/test').Page,
 	nextConfig = config,
-	nextUsageData = usageData
+	nextUsageData = rawUsageData
 ) {
 	await page.evaluate(([nextConfig, nextUsageData]) => {
 		window.__dashboardHarness.dispatchConfigUpdate(nextConfig);
 		window.__dashboardHarness.dispatchUsageUpdate(nextUsageData);
-	}, [nextConfig, nextUsageData]);
+	}, [nextConfig, serializeUsageSet(nextConfig.displayMode, nextUsageData)]);
 }
 
 test('shows the empty state before any usage data arrives', async ({ page }) => {
@@ -142,9 +160,11 @@ test('flips values and segmented rings between used and remaining modes', async 
 
 	await page.evaluate((nextConfig) => {
 		window.__dashboardHarness.dispatchConfigUpdate(nextConfig);
+		window.__dashboardHarness.dispatchUsageUpdate(nextConfig.usageData);
 	}, {
 		...config,
 		displayMode: 'remaining',
+		usageData: serializeUsageSet('remaining'),
 	});
 
 	await expect(page.locator('.service-card[data-service="Gemini CLI 2.5 Pro"] .progress-value')).toHaveText('82');
@@ -207,15 +227,15 @@ test('updates cards in place when the layout is stable and rebuilds when the lay
 
 	await page.evaluate((nextUsageData) => {
 		window.__dashboardHarness.dispatchUsageUpdate(nextUsageData);
-	}, usageData.map(item => item.serviceName === 'Gemini CLI 2.5 Pro'
+	}, serializeUsageSet('used', rawUsageData.map(item => item.serviceName === 'Gemini CLI 2.5 Pro'
 		? {
 			...item,
 			totalUsed: 27,
 			models: [
-				{ modelName: 'gemini-2.5-pro', used: 27, limit: 100, resetTime: '2026-03-10T18:00:00.000Z' },
+				{ modelName: 'gemini-2.5-pro', used: 27, limit: 100, resetTime: new Date('2026-03-10T18:00:00.000Z') },
 			],
 		}
-		: item));
+		: item)));
 
 	await expect(page.locator('.service-card[data-service="Gemini CLI 2.5 Pro"] .progress-value')).toHaveText('27');
 	await expect(page.evaluate(() => {
@@ -225,16 +245,16 @@ test('updates cards in place when the layout is stable and rebuilds when the lay
 
 	await page.evaluate((nextUsageData) => {
 		window.__dashboardHarness.dispatchUsageUpdate(nextUsageData);
-	}, usageData.map(item => item.serviceName === 'Gemini CLI 2.5 Pro'
+	}, serializeUsageSet('used', rawUsageData.map(item => item.serviceName === 'Gemini CLI 2.5 Pro'
 		? {
 			...item,
 			quotaWindows: [
-				{ label: '1 Hour', used: 27, limit: 100, resetTime: '2026-03-10T11:00:00.000Z' },
-				{ label: '1 Day', used: 45, limit: 100, resetTime: '2026-03-11T10:00:00.000Z' },
+				{ label: '1 Hour', used: 27, limit: 100, resetTime: new Date('2026-03-10T11:00:00.000Z') },
+				{ label: '1 Day', used: 45, limit: 100, resetTime: new Date('2026-03-11T10:00:00.000Z') },
 			],
 			models: [],
 		}
-		: item));
+		: item)));
 
 	await expect(page.locator('.service-card[data-service="Gemini CLI 2.5 Pro"] .quota-window')).toHaveCount(2);
 	await expect(page.evaluate(() => {

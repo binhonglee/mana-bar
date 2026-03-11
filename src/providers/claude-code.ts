@@ -5,6 +5,7 @@ import * as https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AnthropicUsageResponse, parseClaudeUsageResponse } from './claude-code-parse';
+import { getCacheExpiry, getCachedValue, withStaleFallback } from './cache';
 import { debugLog } from '../logger';
 
 const execAsync = promisify(exec);
@@ -77,6 +78,7 @@ function defaultClaudeRequest(options: https.RequestOptions): Promise<ClaudeHttp
  * - Cache: 180 seconds to avoid API hammering
  */
 export class ClaudeCodeProvider extends UsageProvider {
+	readonly serviceId = 'claudeCode' as const;
 	private readonly CACHE_TTL = 180 * 1000; // 3 minutes
 	private readonly claudeDir: string;
 	private readonly credentialsFile: string;
@@ -119,13 +121,13 @@ export class ClaudeCodeProvider extends UsageProvider {
 	}
 
 	async getUsage(): Promise<UsageData | null> {
-		// Return cached data if still valid
-		if (this.cachedData && this.deps.now() < this.cacheExpiry) {
+		const cachedData = getCachedValue(this.cachedData, this.cacheExpiry, this.deps.now());
+		if (cachedData) {
 			debugLog('[ClaudeCode] Returning cached data');
-			return this.cachedData;
+			return cachedData;
 		}
 
-		try {
+		return withStaleFallback(async () => {
 			const token = await this.getAuthToken();
 			debugLog('[ClaudeCode] Got auth token:', token ? `${token.substring(0, 10)}...` : 'null');
 			if (!token) {
@@ -137,14 +139,13 @@ export class ClaudeCodeProvider extends UsageProvider {
 			debugLog('[ClaudeCode] Fetched usage data:', usageData);
 			if (usageData) {
 				this.cachedData = usageData;
-				this.cacheExpiry = this.deps.now() + this.CACHE_TTL;
+				this.cacheExpiry = getCacheExpiry(this.deps.now(), this.CACHE_TTL);
 			}
 
 			return usageData;
-		} catch (error) {
+		}, this.cachedData, (error) => {
 			console.error('[ClaudeCode] Failed to fetch usage:', error);
-			return this.cachedData; // Return stale cache on error
-		}
+		});
 	}
 
 	async getModels(): Promise<string[]> {

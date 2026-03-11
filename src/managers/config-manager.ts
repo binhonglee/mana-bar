@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { ServiceConfig, ServicesConfig, StatusBarTooltipLayout, UsageDisplayMode } from '../types';
+import { getDefaultServicesConfig } from '../services';
+import { ServiceConfig, ServiceId, ServicesConfig, StatusBarTooltipLayout, UsageDisplayMode } from '../types';
 
 /**
  * Manages extension configuration
@@ -37,19 +38,13 @@ export class ConfigManager {
 	 * Get services configuration
 	 */
 	getServicesConfig(): ServicesConfig {
-		return this.getConfig().get<ServicesConfig>('services', {
-			claudeCode: { enabled: true },
-			codex: { enabled: true },
-			vscodeCopilot: { enabled: true },
-			antigravity: { enabled: true },
-			gemini: { enabled: true }
-		});
+		return this.getConfig().get<ServicesConfig>('services', getDefaultServicesConfig());
 	}
 
 	/**
 	 * Get configuration for a specific service
 	 */
-	getServiceConfig(serviceName: keyof ServicesConfig): ServiceConfig | undefined {
+	getServiceConfig(serviceName: ServiceId): ServiceConfig | undefined {
 		const services = this.getServicesConfig();
 		return services[serviceName];
 	}
@@ -57,7 +52,7 @@ export class ConfigManager {
 	/**
 	 * Update service configuration
 	 */
-	async updateServiceConfig(serviceName: keyof ServicesConfig, config: ServiceConfig): Promise<void> {
+	async updateServiceConfig(serviceName: ServiceId, config: ServiceConfig): Promise<void> {
 		const services = this.getServicesConfig();
 		services[serviceName] = config;
 		await this.getConfig().update('services', services, vscode.ConfigurationTarget.Global);

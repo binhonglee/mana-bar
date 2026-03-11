@@ -29,6 +29,7 @@ import { CopilotNetInterceptor } from './net';
 import { debugError, debugLog } from '../../logger';
 
 export class CopilotProvider extends UsageProvider {
+	readonly serviceId = 'vscodeCopilot' as const;
 	private readonly deps: ResolvedCopilotProviderDeps;
 	private initialized = false;
 	private currentSnapshot: CopilotQuotaSnapshot | null = null;
@@ -125,6 +126,7 @@ export class CopilotProvider extends UsageProvider {
 		}
 
 		return {
+			serviceId: this.serviceId,
 			serviceName: SERVICE_NAME,
 			totalUsed: Math.max(0, Math.round(this.currentSnapshot.used)),
 			totalLimit: Math.round(this.currentSnapshot.quota),

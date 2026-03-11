@@ -39,6 +39,7 @@ function createConfigManager() {
 }
 
 const USAGE_DATA: UsageData[] = [{
+	serviceId: 'codex',
 	serviceName: 'Codex',
 	totalUsed: 58,
 	totalLimit: 100,

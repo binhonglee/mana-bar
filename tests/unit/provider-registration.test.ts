@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { registerUsageProviders } from '../../src/provider-registration';
 import { UsageProvider } from '../../src/providers/base';
+import { ServiceId } from '../../src/types';
 
 class StaticProvider extends UsageProvider {
-	constructor(private readonly serviceName: string) {
+	constructor(readonly serviceId: ServiceId, private readonly serviceName: string) {
 		super();
 	}
 
@@ -35,7 +36,7 @@ describe('registerUsageProviders', () => {
 		const registered: string[] = [];
 		const testHarness = {
 			registerProviders: vi.fn(async (usageManager: { registerProvider: (provider: UsageProvider) => void }) => {
-				usageManager.registerProvider(new StaticProvider('Test Provider'));
+				usageManager.registerProvider(new StaticProvider('codex', 'Test Provider'));
 			}),
 			advanceScenario: vi.fn(),
 			getScenarioIndex: vi.fn(() => 0),
@@ -68,19 +69,27 @@ describe('registerUsageProviders', () => {
 			extensionUri: vscode.Uri.file('/extension-root'),
 		} as any, {
 			factories: {
-				createClaudeCodeProvider: () => new StaticProvider('Claude Code'),
-				createCodexProvider: () => new StaticProvider('Codex'),
-				createCopilotProvider: () => new StaticProvider('VSCode Copilot'),
+				createClaudeCodeProvider: () => new StaticProvider('claudeCode', 'Claude Code'),
+				createCodexProvider: () => new StaticProvider('codex', 'Codex'),
+				createCopilotProvider: () => new StaticProvider('vscodeCopilot', 'VSCode Copilot'),
 				createAntigravityProvider: () => ({
-					...new StaticProvider('Antigravity'),
+					serviceId: 'antigravity' as const,
+					getServiceName: () => 'Antigravity',
+					isAvailable: async () => true,
+					getUsage: async () => null,
+					getModels: async () => [],
 					discoverQuotaGroups: async (callback: (provider: UsageProvider) => void) => {
-						callback(new StaticProvider('Antigravity Gemini Flash'));
+						callback(new StaticProvider('antigravity', 'Antigravity Gemini Flash'));
 					},
 				}) as any,
 				createGeminiProvider: () => ({
-					...new StaticProvider('Gemini CLI'),
+					serviceId: 'gemini' as const,
+					getServiceName: () => 'Gemini CLI',
+					isAvailable: async () => true,
+					getUsage: async () => null,
+					getModels: async () => [],
 					discoverQuotaGroups: async (callback: (provider: UsageProvider) => void) => {
-						callback(new StaticProvider('Gemini CLI 2.5 Pro'));
+						callback(new StaticProvider('gemini', 'Gemini CLI 2.5 Pro'));
 					},
 				}) as any,
 			},
@@ -105,19 +114,27 @@ describe('registerUsageProviders', () => {
 			extensionUri: vscode.Uri.file('/extension-root'),
 		} as any, {
 			factories: {
-				createClaudeCodeProvider: () => new StaticProvider('Claude Code'),
-				createCodexProvider: () => new StaticProvider('Codex'),
-				createCopilotProvider: () => new StaticProvider('VSCode Copilot'),
+				createClaudeCodeProvider: () => new StaticProvider('claudeCode', 'Claude Code'),
+				createCodexProvider: () => new StaticProvider('codex', 'Codex'),
+				createCopilotProvider: () => new StaticProvider('vscodeCopilot', 'VSCode Copilot'),
 				createAntigravityProvider: () => ({
-					...new StaticProvider('Antigravity'),
+					serviceId: 'antigravity' as const,
+					getServiceName: () => 'Antigravity',
+					isAvailable: async () => true,
+					getUsage: async () => null,
+					getModels: async () => [],
 					discoverQuotaGroups: async () => {
 						throw new Error('antigravity failed');
 					},
 				}) as any,
 				createGeminiProvider: () => ({
-					...new StaticProvider('Gemini CLI'),
+					serviceId: 'gemini' as const,
+					getServiceName: () => 'Gemini CLI',
+					isAvailable: async () => true,
+					getUsage: async () => null,
+					getModels: async () => [],
 					discoverQuotaGroups: async (callback: (provider: UsageProvider) => void) => {
-						callback(new StaticProvider('Gemini CLI 2.5 Pro'));
+						callback(new StaticProvider('gemini', 'Gemini CLI 2.5 Pro'));
 					},
 				}) as any,
 			},

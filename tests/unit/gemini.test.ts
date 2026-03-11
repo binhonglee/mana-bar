@@ -116,13 +116,14 @@ describe('GeminiProvider', () => {
 			},
 			fetch: fetch as any,
 		});
-		const registered: Array<{ getServiceName(): string; getUsage(): Promise<any> }> = [];
+		const registered: Array<{ serviceId: string; getServiceName(): string; getUsage(): Promise<any> }> = [];
 
 		await provider.discoverQuotaGroups((usageProvider) => {
 			registered.push(usageProvider as any);
 		});
 
 		expect(registered.map(item => item.getServiceName())).toEqual(['Gemini CLI 2.5 Pro']);
+		expect(registered.map(item => item.serviceId)).toEqual(['gemini']);
 		await expect(registered[0]?.getUsage()).resolves.toMatchObject({
 			serviceName: 'Gemini CLI 2.5 Pro',
 			totalUsed: 18,
@@ -184,13 +185,14 @@ describe('GeminiProvider', () => {
 			},
 			fetch: fetch as any,
 		});
-		const registered: Array<{ getServiceName(): string; getUsage(): Promise<any> }> = [];
+		const registered: Array<{ serviceId: string; getServiceName(): string; getUsage(): Promise<any> }> = [];
 
 		await provider.discoverQuotaGroups((usageProvider) => {
 			registered.push(usageProvider as any);
 		});
 
 		expect(registered.map(item => item.getServiceName())).toEqual(['Gemini CLI 2.5 Flash']);
+		expect(registered.map(item => item.serviceId)).toEqual(['gemini']);
 		await expect(registered[0]?.getUsage()).resolves.toMatchObject({
 			totalUsed: 45,
 		});

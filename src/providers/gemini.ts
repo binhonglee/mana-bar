@@ -12,6 +12,7 @@ import {
 	humanizeGeminiModelLabel,
 	normalizeGeminiQuotaBuckets,
 } from './gemini-parse';
+import { getCacheExpiry, getCachedValue, withStaleFallback } from './cache';
 import { debugLog, debugWarn } from '../logger';
 
 const execAsync = promisify(exec);
@@ -114,6 +115,7 @@ export interface GeminiProviderDeps {
  * Child providers are registered per visible Gemini model.
  */
 export class GeminiProvider extends UsageProvider {
+	readonly serviceId = 'gemini' as const;
 	private readonly CACHE_TTL = 180 * 1000; // 3 minutes
 	private readonly CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com/v1internal';
 	private readonly geminiDir: string;
@@ -540,11 +542,12 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private async getQuotaResponse(): Promise<RetrieveUserQuotaResponse | null> {
-		if (this.cachedQuotaResponse && this.deps.now() < this.cacheExpiry) {
-			return this.cachedQuotaResponse;
+		const cachedQuotaResponse = getCachedValue(this.cachedQuotaResponse, this.cacheExpiry, this.deps.now());
+		if (cachedQuotaResponse) {
+			return cachedQuotaResponse;
 		}
 
-		try {
+		return withStaleFallback(async () => {
 			const authType = await this.getSelectedAuthType();
 			if (authType !== 'oauth-personal') {
 				return null;
@@ -562,12 +565,11 @@ export class GeminiProvider extends UsageProvider {
 
 			const quotaResponse = await this.fetchUserQuota(accessToken, projectId);
 			this.cachedQuotaResponse = quotaResponse;
-			this.cacheExpiry = this.deps.now() + this.CACHE_TTL;
+			this.cacheExpiry = getCacheExpiry(this.deps.now(), this.CACHE_TTL);
 			return quotaResponse;
-		} catch (error) {
+		}, this.cachedQuotaResponse, (error) => {
 			console.error('[Gemini] Failed to fetch usage:', error);
-			return this.cachedQuotaResponse;
-		}
+		});
 	}
 
 	private async resolveProjectId(accessToken: string): Promise<string | null> {
@@ -627,6 +629,7 @@ export class GeminiProvider extends UsageProvider {
 }
 
 class GeminiModelProvider extends UsageProvider {
+	readonly serviceId = 'gemini' as const;
 	private readonly serviceName: string;
 
 	constructor(
@@ -658,6 +661,7 @@ class GeminiModelProvider extends UsageProvider {
 			}
 
 			return {
+				serviceId: this.serviceId,
 				serviceName: this.serviceName,
 				totalUsed: modelUsage.used,
 				totalLimit: modelUsage.limit,

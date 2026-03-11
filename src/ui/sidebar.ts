@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
-import { UsageData, getUsageStatus, UsageStatus } from '../types';
-import { formatTimeUntilReset } from '../utils';
-import { formatUsageDisplay } from '../usage-display';
+import { UsageStatus } from '../types';
+import { toServiceViewModel } from '../usage-display';
 
 /**
  * Tree item for the sidebar
@@ -90,22 +89,20 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 		}
 
 		return allUsage.map(usage => {
-			const status = getUsageStatus(usage.totalUsed, usage.totalLimit);
-			const icon = status === UsageStatus.CRITICAL ? 'error' :
-				status === UsageStatus.WARNING ? 'warning' : 'pass';
-
-			const display = formatUsageDisplay(usage.totalUsed, usage.totalLimit, displayMode);
+			const viewModel = toServiceViewModel(usage, displayMode);
+			const icon = viewModel.status === UsageStatus.CRITICAL ? 'error' :
+				viewModel.status === UsageStatus.WARNING ? 'warning' : 'pass';
 
 			const item = new UsageTreeItem(
-				usage.serviceName,
-				display,
+				viewModel.serviceName,
+				viewModel.displayText,
 				vscode.TreeItemCollapsibleState.Expanded,
 				new vscode.ThemeIcon(icon),
-				`service:${usage.serviceName}`
+				`service:${viewModel.serviceName}`
 			);
 
 			// Store service name for getting children
-			(item as any).serviceName = usage.serviceName;
+			(item as any).serviceName = viewModel.serviceName;
 
 			return item;
 		});
@@ -126,7 +123,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 
 		// Reset time item
 		if (usage.resetTime) {
-			const timeStr = formatTimeUntilReset(usage.resetTime);
+			const timeStr = toServiceViewModel(usage, this.configManager?.getDisplayMode() ?? 'remaining').resetText ?? '—';
 			items.push(new UsageTreeItem(
 				'Resets in',
 				timeStr,

@@ -207,6 +207,7 @@ export function parseAntigravityQuotaForGroup(
 	}
 
 	return {
+		serviceId: 'antigravity',
 		serviceName,
 		totalUsed: Math.round(maxUsedPercent),
 		totalLimit: 100,

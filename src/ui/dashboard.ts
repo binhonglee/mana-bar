@@ -1,58 +1,7 @@
 import * as vscode from 'vscode';
-import { UsageData, ModelUsage, QuotaWindowUsage } from '../types';
+import { buildDashboardConfigPayload, HostToWebviewMessage, serializeUsageData, WebviewToHostMessage } from '../dashboard-serialization';
 import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
-
-/**
- * Serialized versions of types with Date -> string conversion for postMessage
- */
-interface SerializedModelUsage {
-	modelName: string;
-	used: number;
-	limit: number;
-	resetTime?: string;
-}
-
-interface SerializedQuotaWindowUsage {
-	label: string;
-	used: number;
-	limit: number;
-	resetTime?: string;
-}
-
-interface SerializedUsageData {
-	serviceName: string;
-	totalUsed: number;
-	totalLimit: number;
-	resetTime?: string;
-	progressSegments?: number;
-	quotaWindows?: SerializedQuotaWindowUsage[];
-	models?: SerializedModelUsage[];
-	lastUpdated: string;
-}
-
-function serializeUsageData(data: UsageData): SerializedUsageData {
-	return {
-		serviceName: data.serviceName,
-		totalUsed: data.totalUsed,
-		totalLimit: data.totalLimit,
-		resetTime: data.resetTime?.toISOString(),
-		progressSegments: data.progressSegments,
-		quotaWindows: data.quotaWindows?.map((window: QuotaWindowUsage) => ({
-			label: window.label,
-			used: window.used,
-			limit: window.limit,
-			resetTime: window.resetTime?.toISOString(),
-		})),
-		models: data.models?.map(m => ({
-			modelName: m.modelName,
-			used: m.used,
-			limit: m.limit,
-			resetTime: m.resetTime?.toISOString(),
-		})),
-		lastUpdated: data.lastUpdated.toISOString(),
-	};
-}
 
 function getNonce(): string {
 	let text = '';
@@ -155,7 +104,7 @@ export class DashboardPanel {
 		);
 
 		this._disposables.push(
-			this._configManager.onConfigChange(() => this._sendConfigUpdate())
+			this._configManager.onConfigChange(() => this._sendUpdate())
 		);
 	}
 
@@ -166,28 +115,23 @@ export class DashboardPanel {
 
 	private _sendUsageUpdate(): void {
 		const allUsage = this._usageManager.getAllUsageData();
-		this._panel.webview.postMessage({
+		const message: HostToWebviewMessage = {
 			type: 'usageUpdate',
-			data: allUsage.map(serializeUsageData),
+			data: allUsage.map((usage) => serializeUsageData(usage, this._configManager.getDisplayMode())),
 			timestamp: new Date().toISOString(),
-		});
+		};
+		this._panel.webview.postMessage(message);
 	}
 
 	private _sendConfigUpdate(): void {
-		this._panel.webview.postMessage({
+		const message: HostToWebviewMessage = {
 			type: 'configUpdate',
-			config: {
-				displayMode: this._configManager.getDisplayMode(),
-				statusBarTooltipLayout: this._configManager.getStatusBarTooltipLayout(),
-				debugLogs: this._configManager.getDebugLogs(),
-				pollingInterval: this._configManager.getPollingInterval(),
-				services: this._configManager.getServicesConfig(),
-				hiddenServices: this._configManager.getHiddenServices(),
-			},
-		});
+			config: buildDashboardConfigPayload(this._configManager),
+		};
+		this._panel.webview.postMessage(message);
 	}
 
-	private _handleMessage(message: any): void {
+	private _handleMessage(message: WebviewToHostMessage): void {
 		switch (message.type) {
 			case 'ready':
 				this._sendUpdate();
