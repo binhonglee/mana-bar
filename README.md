@@ -1,8 +1,8 @@
-# mana.bar
+![Landing](assets/screenshots/landing.png)
+
+![Logo](assets/full-width-logo.png)
 
 Track your AI coding quota across Claude Code, Codex, VSCode Copilot, Antigravity, and Gemini CLI — all from one place inside VS Code.
-
-![Landing](assets/screenshots/landing.png)
 
 ## Why?
 
@@ -36,7 +36,7 @@ Hover for a quick summary — choose between a regular table or a monospaced blo
 
 | Regular | Monospaced |
 |---------|------------|
-| ![Regular tooltip](assets/screenshots/status-bar-hover-regular.png) | ![Monospaced tooltip](assets/screenshots/status-bar-hover-monospaced.png) |
+| ![Regular tooltip](assets/screenshots/hover-standard.png) | ![Monospaced tooltip](assets/screenshots/hover-monospaced.png) |
 
 ### Settings
 
@@ -66,10 +66,10 @@ Use the Settings tab inside the dashboard to configure the extension.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Polling Interval | 60s | How often to refresh usage data (10s–5min) |
-| Display Mode | Used | Show quota as "used" or "remaining" |
+| Polling Interval | 120s | How often to refresh usage data (10s–5min) |
+| Display Mode | Remaining | Show quota as "used" or "remaining" |
 | Tooltip Layout | Regular | Status bar hover style: table or monospaced blocks |
-| Services | varies | Enable/disable each provider individually |
+| Services | All Enabled | Enable/disable each provider individually |
 | Hidden Services | none | Hide specific services from the sidebar and status bar |
 
 ## License
