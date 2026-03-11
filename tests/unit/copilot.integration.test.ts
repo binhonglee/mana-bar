@@ -9,12 +9,12 @@ describe('Copilot provider integration', () => {
 
 	beforeEach(() => {
 		(vscode as any).__testing.reset();
-		vi.spyOn(console, 'log').mockImplementation(() => {});
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.spyOn(console, 'log').mockImplementation(() => { });
+		vi.spyOn(console, 'error').mockImplementation(() => { });
 		(vscode as any).__testing.setConfiguration('manaBar', 'services', {
 			claudeCode: { enabled: false },
 			codex: { enabled: false },
-			copilot: { enabled: true },
+			vscodeCopilot: { enabled: true },
 			antigravity: { enabled: false },
 			gemini: { enabled: false },
 		});

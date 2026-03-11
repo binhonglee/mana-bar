@@ -89,8 +89,8 @@ describe('StatusBarController', () => {
 
 		const item = (vscode as any).__testing.getLastStatusBarItem();
 
-		expect(item.text).toBe('LLM Usage: No data');
-		expect(item.tooltip).toBe('No LLM services configured or available');
+		expect(item.text).toBe('mana.bar: No data');
+		expect(item.tooltip).toBe('No services configured or available');
 
 		controller.dispose();
 	});

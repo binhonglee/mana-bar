@@ -183,9 +183,34 @@ interface TestTreeView {
 	dispose: () => void;
 }
 
+interface TestExtension<T = unknown> {
+	id: string;
+	packageJSON: Record<string, unknown>;
+	isActive: boolean;
+	exports: T;
+	activate: () => Promise<T>;
+}
+
+interface TestAuthenticationSessionAccountInformation {
+	id: string;
+	label: string;
+}
+
+interface TestAuthenticationSession {
+	id: string;
+	accessToken: string;
+	idToken?: string;
+	account: TestAuthenticationSessionAccountInformation;
+	scopes: readonly string[];
+}
+
 const commandRegistry = new Map<string, (...args: unknown[]) => unknown>();
 const configurationState = new Map<string, Record<string, unknown>>();
 const configurationEmitter = new EventEmitter<{ affectsConfiguration: (section: string) => boolean }>();
+const extensionsEmitter = new EventEmitter<void>();
+const extensionRegistry = new Map<string, TestExtension>();
+const authenticationSessionsEmitter = new EventEmitter<{ provider: { id: string; label: string } }>();
+const authenticationSessionRegistry = new Map<string, TestAuthenticationSession[]>();
 const serializers = new Map<string, unknown>();
 const createdTreeViews: TestTreeView[] = [];
 const createdWebviewPanels: TestWebviewPanel[] = [];
@@ -300,6 +325,53 @@ export const window = {
 	},
 };
 
+export const extensions = {
+	get all(): TestExtension[] {
+		return [...extensionRegistry.values()];
+	},
+	getExtension<T>(id: string): TestExtension<T> | undefined {
+		return extensionRegistry.get(id) as TestExtension<T> | undefined;
+	},
+	onDidChange(listener: Listener<void>, thisArg?: unknown, disposables?: Disposable[]): Disposable {
+		return registerListener(extensionsEmitter.event, listener, thisArg, disposables);
+	},
+};
+
+export const authentication = {
+	async getSession(
+		providerId: string,
+		scopeListOrRequest: readonly string[] | { fallbackScopes?: readonly string[] },
+		options?: { account?: TestAuthenticationSessionAccountInformation }
+	): Promise<TestAuthenticationSession | undefined> {
+		const requestedScopes = Array.isArray(scopeListOrRequest)
+			? [...scopeListOrRequest]
+			: [...(scopeListOrRequest.fallbackScopes ?? [])];
+		const sessions = authenticationSessionRegistry.get(providerId) ?? [];
+
+		return sessions.find(session =>
+			(!options?.account || session.account.id === options.account.id)
+			&& requestedScopes.every(scope => session.scopes.includes(scope))
+		);
+	},
+	async getAccounts(providerId: string): Promise<readonly TestAuthenticationSessionAccountInformation[]> {
+		const sessions = authenticationSessionRegistry.get(providerId) ?? [];
+		const accounts = new Map<string, TestAuthenticationSessionAccountInformation>();
+
+		for (const session of sessions) {
+			accounts.set(session.account.id, session.account);
+		}
+
+		return [...accounts.values()];
+	},
+	onDidChangeSessions(
+		listener: Listener<{ provider: { id: string; label: string } }>,
+		thisArg?: unknown,
+		disposables?: Disposable[]
+	): Disposable {
+		return registerListener(authenticationSessionsEmitter.event, listener, thisArg, disposables);
+	},
+};
+
 export const Uri = {
 	joinPath(base: TestUri | { fsPath: string } | string, ...parts: string[]): TestUri {
 		return new TestUri(path.join(toFsPath(base), ...parts));
@@ -317,6 +389,8 @@ export const __testing = {
 	reset(): void {
 		commandRegistry.clear();
 		configurationState.clear();
+		extensionRegistry.clear();
+		authenticationSessionRegistry.clear();
 		serializers.clear();
 		createdTreeViews.length = 0;
 		createdWebviewPanels.length = 0;
@@ -347,5 +421,46 @@ export const __testing = {
 	},
 	getRegisteredCommands(): string[] {
 		return [...commandRegistry.keys()];
+	},
+	registerExtension<T>(options: {
+		id: string;
+		packageJSON?: Record<string, unknown>;
+		isActive?: boolean;
+		exports?: T;
+		activate?: () => Promise<T> | T;
+	}): TestExtension<T> {
+		const extension: TestExtension<T> = {
+			id: options.id,
+			packageJSON: options.packageJSON ?? {},
+			isActive: options.isActive ?? false,
+			exports: options.exports as T,
+			activate: async () => {
+				extension.isActive = true;
+				const nextExports = options.activate ? await options.activate() : extension.exports;
+				extension.exports = nextExports;
+				return nextExports;
+			},
+		};
+		extensionRegistry.set(extension.id, extension);
+		extensionsEmitter.fire();
+		return extension;
+	},
+	getExtensions(): TestExtension[] {
+		return [...extensionRegistry.values()];
+	},
+	registerAuthenticationSession(options: {
+		providerId: string;
+		session: TestAuthenticationSession;
+	}): TestAuthenticationSession {
+		const sessions = authenticationSessionRegistry.get(options.providerId) ?? [];
+		sessions.push(options.session);
+		authenticationSessionRegistry.set(options.providerId, sessions);
+		authenticationSessionsEmitter.fire({
+			provider: {
+				id: options.providerId,
+				label: options.providerId,
+			},
+		});
+		return options.session;
 	},
 };

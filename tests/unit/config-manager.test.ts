@@ -16,7 +16,7 @@ describe('ConfigManager', () => {
 		expect(manager.getServicesConfig()).toEqual({
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
-			copilot: { enabled: true },
+			vscodeCopilot: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		});
@@ -27,6 +27,7 @@ describe('ConfigManager', () => {
 		const manager = new ConfigManager();
 
 		await manager.updateServiceConfig('gemini', { enabled: true });
+		await manager.updateServiceConfig('vscodeCopilot', { enabled: true });
 		await manager.updateDisplayMode('remaining');
 		await manager.updateStatusBarTooltipLayout('monospaced');
 		await manager.toggleHideService('Codex');
@@ -36,7 +37,7 @@ describe('ConfigManager', () => {
 		expect((vscode as any).__testing.getConfiguration('manaBar', 'services')).toEqual({
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
-			copilot: { enabled: true },
+			vscodeCopilot: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		});

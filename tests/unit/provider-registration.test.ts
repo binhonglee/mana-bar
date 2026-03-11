@@ -70,6 +70,7 @@ describe('registerUsageProviders', () => {
 			factories: {
 				createClaudeCodeProvider: () => new StaticProvider('Claude Code'),
 				createCodexProvider: () => new StaticProvider('Codex'),
+				createCopilotProvider: () => new StaticProvider('VSCode Copilot'),
 				createAntigravityProvider: () => ({
 					...new StaticProvider('Antigravity'),
 					discoverQuotaGroups: async (callback: (provider: UsageProvider) => void) => {
@@ -88,6 +89,7 @@ describe('registerUsageProviders', () => {
 		expect(registered).toEqual([
 			'Claude Code',
 			'Codex',
+			'VSCode Copilot',
 			'Antigravity Gemini Flash',
 			'Gemini CLI 2.5 Pro',
 		]);
@@ -105,6 +107,7 @@ describe('registerUsageProviders', () => {
 			factories: {
 				createClaudeCodeProvider: () => new StaticProvider('Claude Code'),
 				createCodexProvider: () => new StaticProvider('Codex'),
+				createCopilotProvider: () => new StaticProvider('VSCode Copilot'),
 				createAntigravityProvider: () => ({
 					...new StaticProvider('Antigravity'),
 					discoverQuotaGroups: async () => {
@@ -124,6 +127,7 @@ describe('registerUsageProviders', () => {
 		expect(registered).toEqual([
 			'Claude Code',
 			'Codex',
+			'VSCode Copilot',
 			'Gemini CLI 2.5 Pro',
 		]);
 	});

@@ -42,13 +42,14 @@ class FakeProvider extends UsageProvider {
 }
 
 function createConfigManager(
-	overrides?: Partial<Record<'claudeCode' | 'codex' | 'antigravity' | 'gemini', boolean>>,
+	overrides?: Partial<Record<'claudeCode' | 'codex' | 'vscodeCopilot' | 'antigravity' | 'gemini', boolean>>,
 	pollingInterval = 60
 ) {
 	return {
 		getServicesConfig: () => ({
 			claudeCode: { enabled: overrides?.claudeCode ?? true },
 			codex: { enabled: overrides?.codex ?? true },
+			vscodeCopilot: { enabled: overrides?.vscodeCopilot ?? true },
 			antigravity: { enabled: overrides?.antigravity ?? true },
 			gemini: { enabled: overrides?.gemini ?? true },
 		}),
@@ -76,6 +77,7 @@ describe('getServiceConfigKey', () => {
 	it('maps grouped service names onto config keys', () => {
 		expect(getServiceConfigKey('Claude Code')).toBe('claudeCode');
 		expect(getServiceConfigKey('Codex')).toBe('codex');
+		expect(getServiceConfigKey('VSCode Copilot')).toBe('vscodeCopilot');
 		expect(getServiceConfigKey('Antigravity Gemini Flash')).toBe('antigravity');
 		expect(getServiceConfigKey('AG Gemini Flash')).toBe('antigravity');
 		expect(getServiceConfigKey('Gemini CLI 2.5 Pro')).toBe('gemini');
@@ -84,8 +86,8 @@ describe('getServiceConfigKey', () => {
 
 describe('UsageManager', () => {
 	beforeEach(() => {
-		vi.spyOn(console, 'log').mockImplementation(() => {});
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.spyOn(console, 'log').mockImplementation(() => { });
+		vi.spyOn(console, 'error').mockImplementation(() => { });
 	});
 
 	afterEach(() => {

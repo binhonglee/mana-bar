@@ -49,6 +49,7 @@ const config = {
 	services: {
 		claudeCode: { enabled: true },
 		codex: { enabled: true },
+		vscodeCopilot: { enabled: false },
 		antigravity: { enabled: true },
 		gemini: { enabled: true },
 	},
@@ -154,9 +155,9 @@ test('preserves incoming alphabetical order in card rendering', async ({ page })
 	await pushState(page);
 
 	await expect(page.locator('.service-name')).toHaveText([
-			'Antigravity Gemini Flash',
-			'Claude Code',
-			'Gemini CLI 2.5 Pro',
+		'Antigravity Gemini Flash',
+		'Claude Code',
+		'Gemini CLI 2.5 Pro',
 	]);
 });
 
@@ -285,4 +286,13 @@ test('posts hide and settings actions back through the vscode bridge', async ({ 
 		{ type: 'toggleService', service: 'gemini', enabled: false },
 		{ type: 'setPollingInterval', interval: 120 },
 	]);
+});
+
+test('renders the VSCode Copilot toggle in settings', async ({ page }) => {
+	await loadHarness(page);
+	await pushState(page);
+	await page.click('.tab[data-tab="settings"]');
+
+	await expect(page.locator('input[data-service="copilot"]')).toHaveCount(1);
+	await expect(page.locator('.service-toggle-card')).toContainText(['VSCode Copilot']);
 });
