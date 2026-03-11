@@ -17,7 +17,7 @@ export class StatusBarController {
 			vscode.StatusBarAlignment.Right,
 			100
 		);
-		this.statusBarItem.command = 'llmUsageTracker.openSettings';
+		this.statusBarItem.command = 'manaBar.openSettings';
 		this.statusBarItem.show();
 
 		// Subscribe to usage updates
@@ -40,9 +40,9 @@ export class StatusBarController {
 			.filter(u => !hidden.includes(u.serviceName));
 
 		if (allUsage.length === 0) {
-			this.statusBarItem.text = 'LLM Usage: No data';
+			this.statusBarItem.text = 'mana.bar: No data';
 			this.statusBarItem.backgroundColor = undefined;
-			this.statusBarItem.tooltip = 'No LLM services configured or available';
+			this.statusBarItem.tooltip = 'No services configured or available';
 			return;
 		}
 

@@ -68,7 +68,7 @@ function getNonce(): string {
  */
 export class DashboardPanel {
 	public static currentPanel: DashboardPanel | undefined;
-	private static readonly viewType = 'llmUsageTracker.dashboard';
+	private static readonly viewType = 'manaBar.dashboard';
 	private static panelCreateCount = 0;
 
 	private readonly _panel: vscode.WebviewPanel;
@@ -90,7 +90,7 @@ export class DashboardPanel {
 
 		const panel = vscode.window.createWebviewPanel(
 			DashboardPanel.viewType,
-			'LLM Usage Dashboard',
+			'mana.bar Dashboard',
 			column || vscode.ViewColumn.One,
 			{
 				enableScripts: true,
@@ -195,7 +195,7 @@ export class DashboardPanel {
 				});
 				break;
 			case 'setPollingInterval':
-				vscode.workspace.getConfiguration('llmUsageTracker').update(
+				vscode.workspace.getConfiguration('manaBar').update(
 					'pollingInterval',
 					message.interval,
 					vscode.ConfigurationTarget.Global
@@ -229,12 +229,12 @@ export class DashboardPanel {
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 	<link rel="stylesheet" href="${cssUri}">
-	<title>LLM Usage Dashboard</title>
+	<title>mana.bar Dashboard</title>
 </head>
 <body>
 	<header class="header">
 		<div class="header-left">
-			<h1 class="header-title">LLM Usage Tracker</h1>
+			<h1 class="header-title">mana.bar</h1>
 		</div>
 		<nav class="tab-bar">
 			<button class="tab active" data-tab="dashboard">Dashboard</button>

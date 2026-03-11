@@ -1,9 +1,9 @@
 {
-  "name": "llm-usage-tracker",
-  "displayName": "LLM Usage Tracker",
-  "description": "Track usage limits across multiple LLM services (Claude Code, Codex, Antigravity, Gemini)",
+  "name": "mana-bar",
+  "displayName": "mana.bar",
+  "description": "Track usage limits across multiple LLM services (Claude Code, Codex, GitHub Copilot, Antigravity, Gemini)",
   "version": "0.0.1",
-  "publisher": "llm-usage-tracker",
+  "publisher": "binhonglee",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -17,49 +17,49 @@
   "contributes": {
     "commands": [
       {
-        "command": "llmUsageTracker.refresh",
+        "command": "manaBar.refresh",
         "title": "Refresh Usage Data",
-        "category": "LLM Usage"
+        "category": "mana.bar"
       },
       {
-        "command": "llmUsageTracker.openSettings",
+        "command": "manaBar.openSettings",
         "title": "Open Dashboard",
-        "category": "LLM Usage"
+        "category": "mana.bar"
       },
       {
-        "command": "llmUsageTracker.openDashboard",
+        "command": "manaBar.openDashboard",
         "title": "Open Dashboard",
-        "category": "LLM Usage"
+        "category": "mana.bar"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "llmUsageTracker",
-          "title": "LLM Usage",
+          "id": "manaBar",
+          "title": "mana.bar",
           "icon": "$(graph)"
         }
       ]
     },
     "views": {
-      "llmUsageTracker": [
+      "manaBar": [
         {
-          "id": "llmUsageTrackerSidebar",
+          "id": "manaBarSidebar",
           "name": "Usage Overview"
         }
       ]
     },
     "configuration": {
-      "title": "LLM Usage Tracker",
+      "title": "mana.bar",
       "properties": {
-        "llmUsageTracker.pollingInterval": {
+        "manaBar.pollingInterval": {
           "type": "number",
           "default": 60,
           "minimum": 10,
           "maximum": 300,
           "description": "Polling interval in seconds (10s - 5min)"
         },
-        "llmUsageTracker.displayMode": {
+        "manaBar.displayMode": {
           "type": "string",
           "enum": [
             "used",
@@ -72,7 +72,7 @@
           "default": "used",
           "description": "Whether quota values are displayed as used or remaining."
         },
-        "llmUsageTracker.statusBarTooltipLayout": {
+        "manaBar.statusBarTooltipLayout": {
           "type": "string",
           "enum": [
             "regular",
@@ -85,19 +85,24 @@
           "default": "regular",
           "description": "How the status bar hover tooltip is laid out."
         },
-        "llmUsageTracker.hiddenServices": {
+        "manaBar.hiddenServices": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "List of service names hidden from sidebar and status bar"
         },
-        "llmUsageTracker.services": {
+        "manaBar.services": {
           "type": "object",
           "default": {
             "claudeCode": {
               "enabled": true
             },
             "codex": {
+              "enabled": false
+            },
+            "copilot": {
               "enabled": false
             },
             "antigravity": {
@@ -107,7 +112,7 @@
               "enabled": false
             }
           },
-          "description": "Service configuration"
+          "description": "Service configuration. GitHub Copilot support is experimental and logs debugging details to the extension host console."
         }
       }
     }

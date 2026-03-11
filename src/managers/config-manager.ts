@@ -5,7 +5,7 @@ import { ServiceConfig, ServicesConfig, StatusBarTooltipLayout, UsageDisplayMode
  * Manages extension configuration
  */
 export class ConfigManager {
-	private static readonly CONFIG_SECTION = 'llmUsageTracker';
+	private static readonly CONFIG_SECTION = 'manaBar';
 
 	/**
 	 * Get the current configuration
@@ -36,6 +36,7 @@ export class ConfigManager {
 		return this.getConfig().get<ServicesConfig>('services', {
 			claudeCode: { enabled: false }, // Disabled due to Anthropic API bug
 			codex: { enabled: true },
+			copilot: { enabled: false },
 			antigravity: { enabled: true }, // Auto-detects Antigravity IDE
 			gemini: { enabled: false }
 		});
