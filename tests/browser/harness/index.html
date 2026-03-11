@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="../../../media/dashboard.css">
+	<title>Dashboard Harness</title>
+</head>
+<body>
+	<header class="header">
+		<div class="header-left">
+			<h1 class="header-title">LLM Usage Tracker</h1>
+		</div>
+		<nav class="tab-bar">
+			<button class="tab active" data-tab="dashboard">Dashboard</button>
+			<button class="tab" data-tab="settings">Settings</button>
+		</nav>
+		<div class="header-right">
+			<button id="refresh-btn" class="header-btn" title="Refresh now">R</button>
+			<span id="last-updated" class="last-updated"></span>
+		</div>
+	</header>
+
+	<main id="dashboard-tab" class="tab-content active">
+		<div class="cards-grid" id="cards-container"></div>
+		<div class="hidden-section hidden" id="hidden-section">
+			<div class="hidden-section-header">
+				<span class="hidden-section-title">Hidden</span>
+			</div>
+			<div class="cards-grid" id="hidden-cards-container"></div>
+		</div>
+		<div class="empty-state" id="empty-state">
+			<h2>No Services Active</h2>
+			<p>Enable LLM services in the Settings tab to start tracking usage.</p>
+			<button id="go-settings-btn" class="btn-primary">Go to Settings</button>
+		</div>
+	</main>
+
+	<main id="settings-tab" class="tab-content">
+		<div class="settings-container">
+			<section class="settings-section">
+				<h2 class="section-title">Services</h2>
+				<p class="section-desc">Enable or disable LLM service tracking.</p>
+				<div class="services-grid" id="services-settings"></div>
+			</section>
+			<section class="settings-section">
+				<h2 class="section-title">Display</h2>
+				<p class="section-desc">Choose whether quota values show what you have used or what you have left.</p>
+				<div class="setting-card">
+					<div class="setting-row">
+						<div class="setting-info">
+							<span class="setting-label">Quota display</span>
+							<span class="setting-hint">This affects the dashboard, sidebar, and status bar.</span>
+						</div>
+						<div class="select-group">
+							<select id="display-mode-select" class="setting-select">
+								<option value="used">Used</option>
+								<option value="remaining">Remaining</option>
+							</select>
+						</div>
+					</div>
+				</div>
+				<div class="setting-card">
+					<div class="setting-row">
+						<div class="setting-info">
+							<span class="setting-label">Status bar hover</span>
+							<span class="setting-hint">Choose between the regular layout and the fixed-width monospaced layout.</span>
+						</div>
+						<div class="select-group">
+							<select id="status-bar-tooltip-layout-select" class="setting-select">
+								<option value="regular">Regular</option>
+								<option value="monospaced">Monospaced</option>
+							</select>
+						</div>
+					</div>
+				</div>
+			</section>
+			<section class="settings-section">
+				<h2 class="section-title">Polling</h2>
+				<p class="section-desc">How often to refresh usage data from services.</p>
+				<div class="setting-card">
+					<div class="setting-row">
+						<div class="setting-info">
+							<span class="setting-label">Refresh interval</span>
+							<span class="setting-hint">Lower values increase responsiveness but may cause more API calls.</span>
+						</div>
+						<div class="slider-group">
+							<input type="range" id="polling-slider" min="10" max="300" step="5" value="60">
+							<span id="polling-value" class="slider-value">60s</span>
+						</div>
+					</div>
+				</div>
+			</section>
+		</div>
+	</main>
+
+	<script src="./harness.js"></script>
+	<script src="../../../media/dashboard.js"></script>
+</body>
+</html>

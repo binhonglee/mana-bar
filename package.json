@@ -72,6 +72,19 @@
           "default": "used",
           "description": "Whether quota values are displayed as used or remaining."
         },
+        "llmUsageTracker.statusBarTooltipLayout": {
+          "type": "string",
+          "enum": [
+            "regular",
+            "monospaced"
+          ],
+          "enumDescriptions": [
+            "Show the status bar hover in the regular table style.",
+            "Show the status bar hover in a fixed-width monospaced layout."
+          ],
+          "default": "regular",
+          "description": "How the status bar hover tooltip is laid out."
+        },
         "llmUsageTracker.hiddenServices": {
           "type": "array",
           "items": { "type": "string" },
@@ -103,12 +116,25 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package",
+    "playwright:install": "playwright install chromium",
+    "build:test-e2e": "tsc -p tests/e2e/tsconfig.json",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run --config vitest.config.ts --coverage",
+    "test:browser": "playwright test --config playwright.config.ts",
+    "test:e2e": "npm run build:test-e2e && node out-test/e2e/run-tests.js",
+    "test:all": "npm run test:unit && npm run test:browser && npm run test:e2e",
+    "test:ci": "npm run compile && npm run test:unit && npm run test:browser && npm run test:e2e"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/node": "^25.4.0",
     "@types/vscode": "^1.109.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
-    "typescript": "^5.9.3"
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

@@ -1,5 +1,9 @@
 node_modules/
 out/
+out-test/
 *.vsix
 .vscode-test/
 .DS_Store
+coverage/
+playwright-report/
+test-results/

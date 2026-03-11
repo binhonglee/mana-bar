@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out-test/e2e",
+    "types": ["node"]
+  },
+  "include": ["run-tests.ts", "src/**/*.ts"],
+  "exclude": []
+}
