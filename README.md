@@ -1,8 +1,8 @@
 # mana.bar
 
-Track your AI coding quota across Claude Code, Codex, GitHub Copilot, Antigravity, and Gemini CLI — all from one place inside VS Code.
+Track your AI coding quota across Claude Code, Codex, VSCode Copilot, Antigravity, and Gemini CLI — all from one place inside VS Code.
 
-![Landing](media/screenshots/landing.png)
+![Landing](assets/screenshots/landing.png)
 
 ## Why?
 
@@ -18,31 +18,31 @@ Most AI coding tools don't make it easy to check how much quota you have left. Y
 
 A full-screen webview with live progress rings, multi-window quota bars, per-model breakdowns, and reset countdowns. Toggle between "used" and "remaining" display modes.
 
-![Dashboard](media/screenshots/dashboard.png)
+![Dashboard](assets/screenshots/dashboard.png)
 
 ### Sidebar
 
 Compact tree view in the activity bar. One-line usage summary per service, expandable for model-level detail.
 
-![Sidebar](media/screenshots/sidebar.png)
+![Sidebar](assets/screenshots/sidebar.png)
 
 ### Status Bar
 
 Always-visible usage at the bottom of your editor. Click to open the dashboard.
 
-![Status Bar](media/screenshots/status-bar.png)
+![Status Bar](assets/screenshots/status-bar.png)
 
 Hover for a quick summary — choose between a regular table or a monospaced block layout.
 
 | Regular | Monospaced |
 |---------|------------|
-| ![Regular tooltip](media/screenshots/status-bar-hover-regular.png) | ![Monospaced tooltip](media/screenshots/status-bar-hover-monospaced.png) |
+| ![Regular tooltip](assets/screenshots/status-bar-hover-regular.png) | ![Monospaced tooltip](assets/screenshots/status-bar-hover-monospaced.png) |
 
 ### Settings
 
 Enable or disable individual services, adjust polling intervals, pick your display mode, and hide services you don't need — all from the settings tab inside the dashboard.
 
-![Settings](media/screenshots/settings.png)
+![Settings](assets/screenshots/settings.png)
 
 ## Supported Services
 
@@ -50,7 +50,7 @@ Enable or disable individual services, adjust polling intervals, pick your displ
 |---------|------|--------------|
 | **Claude Code** | Anthropic OAuth (keychain / `.credentials.json`) | Reads 5-hour and 7-day utilization from the Anthropic usage API |
 | **Codex** | `~/.codex/auth.json` or OS keychain | Spawns `codex app-server` and queries rate limits via JSON-RPC |
-| **GitHub Copilot** | VS Code's built-in Copilot session | Experimental — reads completions quota from Copilot's API |
+| **VSCode Copilot** | VS Code's built-in Copilot session | Reads completions quota from Copilot's API |
 | **Antigravity** | Auto-detected in Antigravity IDE | Communicates with the Antigravity extension via VS Code messaging |
 | **Gemini CLI** | Google OAuth (keychain / `oauth_creds.json`) | Queries `cloudcode-pa.googleapis.com` quota endpoints |
 

@@ -175,9 +175,9 @@ export class CodexProvider extends UsageProvider {
 			id: this.nextRequestId++,
 			params: {
 				clientInfo: {
-					name: 'llm-usage-tracker',
-					title: 'LLM Usage Tracker',
-					version: '0.1.0'
+					name: 'mana-bar',
+					title: 'mana.bar',
+					version: '0.0.1'
 				}
 			}
 		});

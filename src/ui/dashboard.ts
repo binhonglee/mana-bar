@@ -90,14 +90,19 @@ export class DashboardPanel {
 
 		const panel = vscode.window.createWebviewPanel(
 			DashboardPanel.viewType,
-			'mana.bar Dashboard',
+			'mana.bar',
 			column || vscode.ViewColumn.One,
 			{
 				enableScripts: true,
 				retainContextWhenHidden: true,
-				localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')],
+				localResourceRoots: [
+					vscode.Uri.joinPath(extensionUri, 'media'),
+					vscode.Uri.joinPath(extensionUri, 'assets'),
+				],
 			}
 		);
+
+		panel.iconPath = vscode.Uri.joinPath(extensionUri, 'assets', 'logo.png');
 
 		DashboardPanel.panelCreateCount += 1;
 		DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, usageManager, configManager);
@@ -220,6 +225,9 @@ export class DashboardPanel {
 		const jsUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(this._extensionUri, 'media', 'dashboard.js')
 		);
+		const logoUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this._extensionUri, 'assets', 'logo.svg')
+		);
 		const nonce = getNonce();
 
 		return `<!DOCTYPE html>
@@ -227,14 +235,13 @@ export class DashboardPanel {
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource};">
 	<link rel="stylesheet" href="${cssUri}">
-	<title>mana.bar Dashboard</title>
+	<title>mana.bar</title>
 </head>
 <body>
 	<header class="header">
 		<div class="header-left">
-			<h1 class="header-title">mana.bar</h1>
 		</div>
 		<nav class="tab-bar">
 			<button class="tab active" data-tab="dashboard">Dashboard</button>
@@ -361,7 +368,10 @@ export class DashboardSerializer implements vscode.WebviewPanelSerializer {
 	async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: any): Promise<void> {
 		panel.webview.options = {
 			enableScripts: true,
-			localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')],
+			localResourceRoots: [
+				vscode.Uri.joinPath(this.extensionUri, 'media'),
+				vscode.Uri.joinPath(this.extensionUri, 'assets'),
+			],
 		};
 		DashboardPanel.revive(panel, this.extensionUri, this.usageManager, this.configManager);
 	}

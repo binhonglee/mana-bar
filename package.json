@@ -1,7 +1,7 @@
 {
   "name": "mana-bar",
   "displayName": "mana.bar",
-  "description": "Track usage limits across multiple LLM services (Claude Code, Codex, GitHub Copilot, Antigravity, Gemini)",
+  "description": "Track usage limits across multiple LLM services (Claude Code, Codex, VSCode Copilot, Antigravity, Gemini)",
   "version": "0.0.1",
   "publisher": "binhonglee",
   "engines": {
@@ -13,6 +13,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "icon": "assets/logo.png",
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -23,7 +24,7 @@
       },
       {
         "command": "manaBar.openSettings",
-        "title": "Open Dashboard",
+        "title": "Open Settings",
         "category": "mana.bar"
       },
       {
@@ -37,7 +38,7 @@
         {
           "id": "manaBar",
           "title": "mana.bar",
-          "icon": "$(graph)"
+          "icon": "assets/alt.svg"
         }
       ]
     },
@@ -54,7 +55,7 @@
       "properties": {
         "manaBar.pollingInterval": {
           "type": "number",
-          "default": 60,
+          "default": 120,
           "minimum": 10,
           "maximum": 300,
           "description": "Polling interval in seconds (10s - 5min)"
@@ -69,7 +70,7 @@
             "Show how much quota has been used.",
             "Show how much quota is left."
           ],
-          "default": "used",
+          "default": "remaining",
           "description": "Whether quota values are displayed as used or remaining."
         },
         "manaBar.statusBarTooltipLayout": {
@@ -100,19 +101,19 @@
               "enabled": true
             },
             "codex": {
-              "enabled": false
+              "enabled": true
             },
             "copilot": {
-              "enabled": false
+              "enabled": true
             },
             "antigravity": {
               "enabled": true
             },
             "gemini": {
-              "enabled": false
+              "enabled": true
             }
           },
-          "description": "Service configuration. GitHub Copilot support is experimental and logs debugging details to the extension host console."
+          "description": "Service configuration. VSCode Copilot support logs debugging details to the extension host console."
         }
       }
     }

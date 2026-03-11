@@ -28,12 +28,13 @@
 	const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 	const SEGMENT_GAP = 3;
 
-	const SERVICE_CONFIG_KEYS = {
-		'Claude Code': 'claudeCode',
-		'Codex': 'codex',
-		'Antigravity': 'antigravity',
-		'Gemini': 'gemini',
-	};
+	const SETTINGS_SERVICES = [
+		{ key: 'antigravity', name: 'Antigravity', desc: 'Google Antigravity usage' },
+		{ key: 'claudeCode', name: 'Claude Code', desc: 'Claude Code usage' },
+		{ key: 'codex', name: 'Codex', desc: 'OpenAI Codex CLI usage' },
+		{ key: 'vscodeCopilot', name: 'VSCode Copilot', desc: 'VSCode Copilot usage' },
+		{ key: 'gemini', name: 'Gemini CLI', desc: 'Google Gemini CLI usage' },
+	];
 
 	// ============ Init ============
 
@@ -596,14 +597,7 @@
 		const container = document.getElementById('services-settings');
 		if (!container) return;
 
-		const services = [
-			{ key: 'antigravity', name: 'Antigravity', desc: 'Google Antigravity usage' },
-			{ key: 'claudeCode', name: 'Claude Code', desc: 'Claude Code usage' },
-			{ key: 'codex', name: 'Codex', desc: 'OpenAI Codex CLI usage' },
-			{ key: 'gemini', name: 'Gemini CLI', desc: 'Google Gemini CLI usage' },
-		];
-
-		container.innerHTML = services.map(svc => {
+		container.innerHTML = SETTINGS_SERVICES.map(svc => {
 			const enabled = state.config.services[svc.key]?.enabled ?? false;
 			return `
 				<div class="service-toggle-card">

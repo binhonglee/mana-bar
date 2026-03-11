@@ -18,11 +18,11 @@ export class ConfigManager {
 	 * Get polling interval in seconds
 	 */
 	getPollingInterval(): number {
-		return this.getConfig().get<number>('pollingInterval', 60);
+		return this.getConfig().get<number>('pollingInterval', 120);
 	}
 
 	getDisplayMode(): UsageDisplayMode {
-		return this.getConfig().get<UsageDisplayMode>('displayMode', 'used');
+		return this.getConfig().get<UsageDisplayMode>('displayMode', 'remaining');
 	}
 
 	getStatusBarTooltipLayout(): StatusBarTooltipLayout {
@@ -34,11 +34,11 @@ export class ConfigManager {
 	 */
 	getServicesConfig(): ServicesConfig {
 		return this.getConfig().get<ServicesConfig>('services', {
-			claudeCode: { enabled: false }, // Disabled due to Anthropic API bug
+			claudeCode: { enabled: true },
 			codex: { enabled: true },
-			copilot: { enabled: false },
-			antigravity: { enabled: true }, // Auto-detects Antigravity IDE
-			gemini: { enabled: false }
+			vscodeCopilot: { enabled: true },
+			antigravity: { enabled: true },
+			gemini: { enabled: true }
 		});
 	}
 

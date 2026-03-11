@@ -49,6 +49,7 @@ export interface ServiceConfig {
 export interface ServicesConfig {
 	claudeCode?: ServiceConfig;
 	codex?: ServiceConfig;
+	vscodeCopilot?: ServiceConfig;
 	antigravity?: ServiceConfig;
 	gemini?: ServiceConfig;
 }

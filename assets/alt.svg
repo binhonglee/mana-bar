@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 124 124" fill="none">
+<rect x="2" y="2" width="120" height="120" rx="24" fill="none" stroke="currentColor" stroke-width="4"/>
+<text x="10" y="30" fill="currentColor" font-size="15">A\</text>
+<rect opacity="0.3" x="30" y="15" width="84" height="17.3876" rx="4" fill="#cccccc"/>
+<rect x="30" y="15" width="10" height="17.3876" rx="4" fill="#cca700"/>
+<text x="10" y="55" fill="currentColor" font-size="15">🤖</text>
+<rect opacity="0.3" x="30" y="40" width="84" height="17.3876" rx="4" fill="#cccccc"/>
+<rect x="30" y="40" width="70" height="17.3876" rx="4" fill="#89d185"/>
+<text x="10" y="80" fill="currentColor" font-size="15">🌀</text>
+<rect opacity="0.3" x="30" y="65" width="84" height="17.3876" rx="4" fill="#cccccc"/>
+<rect x="30" y="65" width="60" height="17.3876" rx="4" fill="#89d185"/>
+<text x="10" y="105" fill="currentColor" font-size="15">✨</text>
+<rect opacity="0.3" x="30" y="90" width="84" height="17.3876" rx="4" fill="#cccccc"/>
+<rect x="30" y="90" width="75" height="17.3876" rx="4" fill="#89d185"/>
+</svg>

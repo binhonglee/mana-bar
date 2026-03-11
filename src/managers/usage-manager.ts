@@ -11,11 +11,14 @@ interface CacheEntry {
 	expiresAt: number;
 }
 
-export function getServiceConfigKey(serviceName: string): 'claudeCode' | 'codex' | 'antigravity' | 'gemini' {
+export function getServiceConfigKey(serviceName: string): 'claudeCode' | 'codex' | 'vscodeCopilot' | 'antigravity' | 'gemini' {
 	const normalized = serviceName.toLowerCase().replace(/\s+/g, '');
 
 	if (serviceName.startsWith('AG ') || serviceName.startsWith('Antigravity')) {
 		return 'antigravity';
+	}
+	if (serviceName.startsWith('VSCode Copilot')) {
+		return 'vscodeCopilot';
 	}
 	if (serviceName.startsWith('Gemini')) {
 		return 'gemini';
@@ -24,6 +27,7 @@ export function getServiceConfigKey(serviceName: string): 'claudeCode' | 'codex'
 	switch (normalized) {
 		case 'claudecode': return 'claudeCode';
 		case 'codex': return 'codex';
+		case 'vscodecopilot': return 'vscodeCopilot';
 		case 'antigravity': return 'antigravity';
 		case 'gemini': return 'gemini';
 		default: return 'claudeCode';
@@ -106,6 +110,7 @@ export class UsageManager {
 			// Skip if disabled or not configured
 			if (!serviceConfig?.enabled) {
 				console.log(`[UsageManager] ${serviceName} is disabled, skipping`);
+				this.cache.delete(serviceName);
 				continue;
 			}
 
@@ -113,6 +118,7 @@ export class UsageManager {
 			const isAvailable = await provider.isAvailable();
 			console.log(`[UsageManager] ${serviceName} isAvailable: ${isAvailable}`);
 			if (!isAvailable) {
+				this.cache.delete(serviceName);
 				continue;
 			}
 
@@ -122,6 +128,8 @@ export class UsageManager {
 					console.log(`[UsageManager] ${serviceName} returned data:`, data);
 					if (data) {
 						this.updateCache(serviceName, data);
+					} else {
+						this.cache.delete(serviceName);
 					}
 				}).catch((error) => {
 					console.error(`Error fetching usage for ${serviceName}:`, error);

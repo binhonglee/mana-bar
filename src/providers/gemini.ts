@@ -606,7 +606,7 @@ export class GeminiProvider extends UsageProvider {
 			headers: {
 				'Authorization': `Bearer ${accessToken}`,
 				'Content-Type': 'application/json',
-				'User-Agent': 'LLM Usage Tracker',
+				'User-Agent': 'mana.bar',
 			},
 			body: JSON.stringify(body),
 			signal: AbortSignal.timeout(10_000),

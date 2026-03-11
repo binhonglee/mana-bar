@@ -10,14 +10,15 @@ describe('ConfigManager', () => {
 	it('returns the expected defaults', () => {
 		const manager = new ConfigManager();
 
-		expect(manager.getPollingInterval()).toBe(60);
-		expect(manager.getDisplayMode()).toBe('used');
+		expect(manager.getPollingInterval()).toBe(120);
+		expect(manager.getDisplayMode()).toBe('remaining');
 		expect(manager.getStatusBarTooltipLayout()).toBe('regular');
 		expect(manager.getServicesConfig()).toEqual({
-			claudeCode: { enabled: false },
+			claudeCode: { enabled: true },
 			codex: { enabled: true },
+			copilot: { enabled: true },
 			antigravity: { enabled: true },
-			gemini: { enabled: false },
+			gemini: { enabled: true },
 		});
 		expect(manager.getHiddenServices()).toEqual([]);
 	});
@@ -32,9 +33,10 @@ describe('ConfigManager', () => {
 		await manager.toggleHideService('Codex');
 		await manager.toggleHideService('Claude Code');
 
-		expect((vscode as any).__testing.getConfiguration('llmUsageTracker', 'services')).toEqual({
-			claudeCode: { enabled: false },
+		expect((vscode as any).__testing.getConfiguration('manaBar', 'services')).toEqual({
+			claudeCode: { enabled: true },
 			codex: { enabled: true },
+			copilot: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		});
@@ -51,7 +53,7 @@ describe('ConfigManager', () => {
 		await vscode.workspace.getConfiguration('otherSection').update('value', 1, vscode.ConfigurationTarget.Global);
 		expect(callback).not.toHaveBeenCalled();
 
-		await vscode.workspace.getConfiguration('llmUsageTracker').update('pollingInterval', 120, vscode.ConfigurationTarget.Global);
+		await vscode.workspace.getConfiguration('manaBar').update('pollingInterval', 120, vscode.ConfigurationTarget.Global);
 		expect(callback).toHaveBeenCalledTimes(1);
 
 		disposable.dispose();

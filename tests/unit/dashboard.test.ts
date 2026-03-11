@@ -112,7 +112,10 @@ describe('DashboardPanel', () => {
 
 		expect(panel.webview.options).toEqual({
 			enableScripts: true,
-			localResourceRoots: [vscode.Uri.joinPath(vscode.Uri.file('/extension-root'), 'media')],
+			localResourceRoots: [
+				vscode.Uri.joinPath(vscode.Uri.file('/extension-root'), 'media'),
+				vscode.Uri.joinPath(vscode.Uri.file('/extension-root'), 'assets'),
+			],
 		});
 		expect(DashboardPanel.getDebugState()).toEqual({
 			isOpen: true,
