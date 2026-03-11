@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { UsageManager } from './managers/usage-manager';
 import { ClaudeCodeProvider } from './providers/claude-code';
 import { CodexProvider } from './providers/codex';
+import { CopilotProvider } from './providers/copilot';
 import { AntigravityProvider } from './providers/antigravity';
 import { GeminiProvider } from './providers/gemini';
 import { TestProviderHarness } from './testing/fake-providers';
@@ -18,6 +19,7 @@ interface DiscoverableProvider extends UsageProvider {
 export interface ProviderRegistrationFactories {
 	createClaudeCodeProvider?: () => UsageProvider;
 	createCodexProvider?: (context: vscode.ExtensionContext) => UsageProvider;
+	createCopilotProvider?: () => UsageProvider;
 	createAntigravityProvider?: (context: vscode.ExtensionContext) => DiscoverableProvider;
 	createGeminiProvider?: () => DiscoverableProvider;
 	createTestHarness?: () => TestProviderHarness;
@@ -42,6 +44,9 @@ export async function registerUsageProviders(
 
 	const codexProvider = options?.factories?.createCodexProvider?.(context) ?? new CodexProvider(context);
 	usageManager.registerProvider(codexProvider);
+
+	const copilotProvider = options?.factories?.createCopilotProvider?.() ?? new CopilotProvider();
+	usageManager.registerProvider(copilotProvider);
 
 	const antigravityProvider = options?.factories?.createAntigravityProvider?.(context) ?? new AntigravityProvider(context);
 	try {
