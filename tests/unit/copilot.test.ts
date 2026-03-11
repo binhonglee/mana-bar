@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { CopilotProvider } from '../../src/providers/copilot';
+import { setDebugLoggingEnabled } from '../../src/logger';
 
 const RESET_TIME = '2026-03-10T18:00:00.000Z';
 const PREMIUM_HEADER = `ent=100&rem=60&rst=${encodeURIComponent(RESET_TIME)}&ov=0&ovPerm=false`;
@@ -46,6 +47,7 @@ describe('CopilotProvider', () => {
 
 	beforeEach(() => {
 		(vscode as any).__testing.reset();
+		setDebugLoggingEnabled(true);
 		vi.spyOn(console, 'log').mockImplementation(() => {});
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 	});
@@ -53,6 +55,7 @@ describe('CopilotProvider', () => {
 	afterEach(() => {
 		provider?.dispose();
 		provider = undefined;
+		setDebugLoggingEnabled(false);
 		vi.restoreAllMocks();
 	});
 

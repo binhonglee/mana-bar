@@ -12,6 +12,7 @@ import {
 	humanizeGeminiModelLabel,
 	normalizeGeminiQuotaBuckets,
 } from './gemini-parse';
+import { debugLog, debugWarn } from '../logger';
 
 const execAsync = promisify(exec);
 
@@ -203,7 +204,7 @@ export class GeminiProvider extends UsageProvider {
 
 		const discovery = await this.discoverVisibleModelIds();
 		if (!discovery || discovery.modelIds.length === 0) {
-			console.log('[Gemini] No Gemini model providers discovered');
+			debugLog('[Gemini] No Gemini model providers discovered');
 			return;
 		}
 
@@ -211,7 +212,7 @@ export class GeminiProvider extends UsageProvider {
 		this.discoveredModelIds = discovery.modelIds;
 		this.hasDiscovered = true;
 
-		console.log(
+		debugLog(
 			`[Gemini] Discovered ${discovery.modelIds.length} Gemini model provider(s) via ${discovery.source}: ${discovery.modelIds.join(', ')}`
 		);
 
@@ -272,7 +273,7 @@ export class GeminiProvider extends UsageProvider {
 			return null;
 		}
 
-		console.log('[Gemini] Falling back to raw quota buckets for model discovery');
+		debugLog('[Gemini] Falling back to raw quota buckets for model discovery');
 		return {
 			modelIds,
 			source: 'raw',
@@ -365,11 +366,11 @@ export class GeminiProvider extends UsageProvider {
 				defaultModelConfigsFile: await this.deps.fileExists(defaultModelConfigsFile) ? defaultModelConfigsFile : undefined,
 			};
 
-			console.log(`[Gemini] Resolved Gemini CLI config files under ${packageRoot}`);
+			debugLog(`[Gemini] Resolved Gemini CLI config files under ${packageRoot}`);
 			return this.cliConfigPaths;
 		}
 
-		console.log(`[Gemini] Could not resolve Gemini CLI config files from ${binaryPath}`);
+		debugLog(`[Gemini] Could not resolve Gemini CLI config files from ${binaryPath}`);
 		return null;
 	}
 
@@ -382,7 +383,7 @@ export class GeminiProvider extends UsageProvider {
 			const module = await this.deps.importModule(pathToFileURL(modelsFile).href) as GeminiModelsModule;
 			return extractValidGeminiModels(module);
 		} catch (error) {
-			console.warn('[Gemini] Failed to load VALID_GEMINI_MODELS:', error);
+			debugWarn('[Gemini] Failed to load VALID_GEMINI_MODELS:', error);
 			return [];
 		}
 	}
@@ -396,7 +397,7 @@ export class GeminiProvider extends UsageProvider {
 			const module = await this.deps.importModule(pathToFileURL(defaultModelConfigsFile).href) as GeminiDefaultModelConfigsModule;
 			return extractGeminiModelsFromDefaultConfigs(module);
 		} catch (error) {
-			console.warn('[Gemini] Failed to load defaultModelConfigs fallback:', error);
+			debugWarn('[Gemini] Failed to load defaultModelConfigs fallback:', error);
 			return [];
 		}
 	}
@@ -526,14 +527,14 @@ export class GeminiProvider extends UsageProvider {
 
 			if (!response.ok) {
 				const text = await response.text().catch(() => '');
-				console.warn(`[Gemini] Token refresh failed (${response.status}): ${text.slice(0, 300)}`);
+				debugWarn(`[Gemini] Token refresh failed (${response.status}): ${text.slice(0, 300)}`);
 				return null;
 			}
 
 			const data = await response.json() as { access_token?: string };
 			return data.access_token || null;
 		} catch (error) {
-			console.warn('[Gemini] Token refresh error:', error);
+			debugWarn('[Gemini] Token refresh error:', error);
 			return null;
 		}
 	}
@@ -587,7 +588,7 @@ export class GeminiProvider extends UsageProvider {
 		const response = await this.postJson<LoadCodeAssistResponse>('loadCodeAssist', accessToken, body);
 
 		if (!response.currentTier?.id) {
-			console.log('[Gemini] Account is not onboarded yet. Open Gemini CLI once and finish setup.');
+			debugLog('[Gemini] Account is not onboarded yet. Open Gemini CLI once and finish setup.');
 			return null;
 		}
 

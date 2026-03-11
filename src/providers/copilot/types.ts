@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { QuotaWindowUsage } from '../types';
+import { QuotaWindowUsage } from '../../types';
 
 export const SERVICE_NAME = 'VSCode Copilot';
 export const CHAT_QUOTA_CONTEXT_KEY = 'github.copilot.chat.quotaExceeded';

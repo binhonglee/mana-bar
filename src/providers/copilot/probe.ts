@@ -9,6 +9,7 @@ import {
 } from './types';
 import { classifySurfaceFromExtensionId, isRecord } from './utils';
 import { CopilotParser } from './parse';
+import { debugError, debugLog } from '../../logger';
 
 export class CopilotProbeManager {
 	private loggedExtensionSummaries = new Map<string, string>();
@@ -32,14 +33,14 @@ export class CopilotProbeManager {
 				const summary = this.describeExportValue(exportValue);
 				if (this.loggedExtensionSummaries.get(extensionId) !== summary) {
 					this.loggedExtensionSummaries.set(extensionId, summary);
-					console.log(
+					debugLog(
 						`[Copilot Probe] ${reason}: ${extensionId}@${extension.packageJSON?.version ?? 'unknown'} active=${extension.isActive} exports=${summary}`
 					);
 				}
 
 				this.inspectExportValue(exportValue, `${extensionId}.exports`, surface, 0, new Set());
 			} catch (error) {
-				console.error(`[Copilot Probe] Failed to inspect ${extensionId}:`, error);
+				debugError(`[Copilot Probe] Failed to inspect ${extensionId}:`, error);
 			}
 		}
 	}
@@ -58,7 +59,7 @@ export class CopilotProbeManager {
 
 		if (this.loggedDiscoverySummary !== discoverySummary) {
 			this.loggedDiscoverySummary = discoverySummary;
-			console.log(`[Copilot Probe] discovered Copilot extensions: ${discoverySummary}`);
+			debugLog(`[Copilot Probe] discovered Copilot extensions: ${discoverySummary}`);
 		}
 
 		return matches;
@@ -271,6 +272,6 @@ export class CopilotProbeManager {
 		}
 
 		this.loggedDerivedSummaries.set(path, summary);
-		console.log(`[Copilot Probe] ${path} => ${summary}`);
+		debugLog(`[Copilot Probe] ${path} => ${summary}`);
 	}
 }

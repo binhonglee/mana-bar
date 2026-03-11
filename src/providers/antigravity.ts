@@ -11,6 +11,7 @@ import {
 	parseAntigravityQuotaForGroup,
 	resolveAntigravityAutoGroupFamily,
 } from './antigravity-parse';
+import { debugLog, debugWarn } from '../logger';
 
 /**
  * Antigravity API response structures
@@ -147,7 +148,7 @@ export class AntigravityProvider extends UsageProvider {
 						const fullPath = path.join(cacheDir, f);
 						return this.deps.statSync(fullPath).isFile();
 					});
-				console.log(`[Antigravity] Cache dir ${cacheDir}: files: ${allFiles.join(', ')}`);
+				debugLog(`[Antigravity] Cache dir ${cacheDir}: files: ${allFiles.join(', ')}`);
 
 				const sortedFiles = allFiles
 					.map(f => ({ name: f, mtime: this.deps.statSync(path.join(cacheDir, f)).mtimeMs }))
@@ -160,7 +161,7 @@ export class AntigravityProvider extends UsageProvider {
 					}
 				}
 			} catch (error) {
-				console.log(`[Antigravity] Failed to scan ${cacheDir}:`, error);
+				debugLog(`[Antigravity] Failed to scan ${cacheDir}:`, error);
 			}
 		}
 
@@ -176,24 +177,24 @@ export class AntigravityProvider extends UsageProvider {
 			const content = this.deps.readFileSync(filePath, 'utf-8');
 			const cached = JSON.parse(content);
 			const keys = Object.keys(cached);
-			console.log(`[Antigravity] File ${filePath}: keys=${keys.join(', ')}`);
+			debugLog(`[Antigravity] File ${filePath}: keys=${keys.join(', ')}`);
 
 			const data = cached.payload || cached;
 
 			if (data.models) {
 				const modelKeys = Object.keys(data.models);
-				console.log(`[Antigravity] Found ${modelKeys.length} models in ${filePath}`);
+				debugLog(`[Antigravity] Found ${modelKeys.length} models in ${filePath}`);
 				if (modelKeys.length > 0) {
 					const firstModel = data.models[modelKeys[0]];
-					console.log(`[Antigravity] Sample model "${modelKeys[0]}": keys=${Object.keys(firstModel).join(', ')}, quotaInfo=${JSON.stringify(firstModel.quotaInfo)}, tagTitle=${firstModel.tagTitle}`);
+					debugLog(`[Antigravity] Sample model "${modelKeys[0]}": keys=${Object.keys(firstModel).join(', ')}, quotaInfo=${JSON.stringify(firstModel.quotaInfo)}, tagTitle=${firstModel.tagTitle}`);
 				}
 
 				const hasQuota = modelKeys.some(k => data.models[k].quotaInfo);
 				if (hasQuota) {
-					console.log(`[Antigravity] Loaded quota data from ${filePath}`);
+					debugLog(`[Antigravity] Loaded quota data from ${filePath}`);
 					return data as AuthorizedQuotaResponse;
 				}
-				console.log(`[Antigravity] Models found but none have quotaInfo`);
+				debugLog(`[Antigravity] Models found but none have quotaInfo`);
 			}
 		} catch {
 			// Not valid JSON or unreadable - skip silently
@@ -221,10 +222,10 @@ export class AntigravityProvider extends UsageProvider {
 		}
 
 		if (isNaN(expiresAtMs) || now >= expiresAtMs - 60000) {
-			console.log(`[Antigravity] Token expired (expiresAt: ${isNaN(expiresAtMs) ? 'NaN' : new Date(expiresAtMs).toISOString()}), refreshing...`);
+			debugLog(`[Antigravity] Token expired (expiresAt: ${isNaN(expiresAtMs) ? 'NaN' : new Date(expiresAtMs).toISOString()}), refreshing...`);
 			const refreshed = await this.refreshAccessToken();
 			if (!refreshed) {
-				console.log('[Antigravity] Token refresh failed');
+				debugLog('[Antigravity] Token refresh failed');
 				return null;
 			}
 		}
@@ -256,16 +257,16 @@ export class AntigravityProvider extends UsageProvider {
 				const accountList = Array.isArray(accounts) ? accounts : Object.values(accounts);
 				for (const account of accountList as AntigravityAccount[]) {
 					if (account.accessToken && account.refreshToken) {
-						console.log(`[Antigravity] Loaded account: ${account.email}, projectId: ${account.projectId}, expiresAt: ${account.expiresAt} (type: ${typeof account.expiresAt})`);
+						debugLog(`[Antigravity] Loaded account: ${account.email}, projectId: ${account.projectId}, expiresAt: ${account.expiresAt} (type: ${typeof account.expiresAt})`);
 						return account;
 					}
 				}
 			} catch (error) {
-				console.log(`[Antigravity] Failed to read ${configPath}:`, error);
+				debugLog(`[Antigravity] Failed to read ${configPath}:`, error);
 			}
 		}
 
-		console.log('[Antigravity] No account found');
+		debugLog('[Antigravity] No account found');
 		return null;
 	}
 
@@ -299,7 +300,7 @@ export class AntigravityProvider extends UsageProvider {
 			const data = await response.json() as { access_token: string; expires_in: number };
 			this.account.accessToken = data.access_token;
 			this.account.expiresAt = this.deps.now() + (data.expires_in * 1000);
-			console.log(`[Antigravity] Token refreshed, new expiry: ${new Date(this.account.expiresAt).toISOString()}`);
+			debugLog(`[Antigravity] Token refreshed, new expiry: ${new Date(this.account.expiresAt).toISOString()}`);
 			return true;
 		} catch (error) {
 			console.error('[Antigravity] Token refresh error:', error);
@@ -311,10 +312,10 @@ export class AntigravityProvider extends UsageProvider {
 	 * Discover quota groups and register sub-providers
 	 */
 	async discoverQuotaGroups(registerCallback: (provider: UsageProvider) => void): Promise<void> {
-		console.log('[Antigravity] Starting quota group discovery...');
+		debugLog('[Antigravity] Starting quota group discovery...');
 
 		if (this.hasDiscovered) {
-			console.log('[Antigravity] Already discovered, skipping');
+			debugLog('[Antigravity] Already discovered, skipping');
 			return;
 		}
 
@@ -323,14 +324,14 @@ export class AntigravityProvider extends UsageProvider {
 		if (!response) {
 			const token = await this.getAccessToken();
 			if (!token) {
-				console.log('[Antigravity] No cached data or auth token found, skipping');
+				debugLog('[Antigravity] No cached data or auth token found, skipping');
 				return;
 			}
 			response = await this.fetchQuotaFromAPI(token);
 		}
 
 		if (!response || !response.models) {
-			console.log('[Antigravity] No quota data available');
+			debugLog('[Antigravity] No quota data available');
 			return;
 		}
 
@@ -339,7 +340,7 @@ export class AntigravityProvider extends UsageProvider {
 		this.responseCacheExpiry = this.deps.now() + this.CACHE_TTL;
 
 		const quotaGroups = this.groupModelsByQuota(response);
-		console.log(`[Antigravity] Discovered ${quotaGroups.size} quota group(s): ${[...quotaGroups.keys()].join(', ')}`);
+		debugLog(`[Antigravity] Discovered ${quotaGroups.size} quota group(s): ${[...quotaGroups.keys()].join(', ')}`);
 
 		for (const [groupName, models] of quotaGroups.entries()) {
 			const subProvider = new AntigravityQuotaGroupProvider(
@@ -348,7 +349,7 @@ export class AntigravityProvider extends UsageProvider {
 				this,
 			);
 			registerCallback(subProvider);
-			console.log(`[Antigravity] Registered sub-provider: Antigravity ${groupName} (${models.length} models)`);
+			debugLog(`[Antigravity] Registered sub-provider: Antigravity ${groupName} (${models.length} models)`);
 		}
 
 		this.hasDiscovered = true;
@@ -418,7 +419,7 @@ export class AntigravityProvider extends UsageProvider {
 		for (const baseUrl of endpoints) {
 			const url = `${baseUrl}/v1internal:fetchAvailableModels`;
 			try {
-				console.log(`[Antigravity] Fetching quota from ${baseUrl} (projectId: ${projectId})`);
+				debugLog(`[Antigravity] Fetching quota from ${baseUrl} (projectId: ${projectId})`);
 				const response = await this.deps.fetch(url, {
 					method: 'POST',
 					headers: {
@@ -438,22 +439,22 @@ export class AntigravityProvider extends UsageProvider {
 
 				if (!response.ok) {
 					const text = await response.text().catch(() => '');
-					console.warn(`[Antigravity] ${baseUrl} returned ${response.status}: ${text.slice(0, 300)}`);
+					debugWarn(`[Antigravity] ${baseUrl} returned ${response.status}: ${text.slice(0, 300)}`);
 					continue; // Try next endpoint
 				}
 
 				const data = await response.json() as AuthorizedQuotaResponse;
-				console.log(`[Antigravity] API returned ${Object.keys(data.models || {}).length} models`);
+				debugLog(`[Antigravity] API returned ${Object.keys(data.models || {}).length} models`);
 				if (data.models) {
 					const firstKey = Object.keys(data.models)[0];
 					if (firstKey) {
 						const sample = data.models[firstKey];
-						console.log(`[Antigravity] API sample model "${firstKey}": keys=${Object.keys(sample).join(', ')}, quotaInfo=${JSON.stringify(sample.quotaInfo)}, tagTitle=${sample.tagTitle}`);
+						debugLog(`[Antigravity] API sample model "${firstKey}": keys=${Object.keys(sample).join(', ')}, quotaInfo=${JSON.stringify(sample.quotaInfo)}, tagTitle=${sample.tagTitle}`);
 					}
 				}
 				return data;
 			} catch (error) {
-				console.warn(`[Antigravity] ${baseUrl} request failed:`, error);
+				debugWarn(`[Antigravity] ${baseUrl} request failed:`, error);
 				continue; // Try next endpoint
 			}
 		}

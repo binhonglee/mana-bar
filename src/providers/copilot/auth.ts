@@ -14,6 +14,7 @@ import {
 	ElectronSafeStorageLike
 } from './types';
 import { isRecord } from './utils';
+import { debugLog } from '../../logger';
 
 export class CopilotAuthManager {
 	private persistedStateDbPath: string | null | undefined;
@@ -80,7 +81,7 @@ export class CopilotAuthManager {
 					}
 				);
 				if (session) {
-					console.log(
+					debugLog(
 						`[Copilot Auth] Reusing ${providerId} session with fallback scopes=${session.scopes.join(', ')}`
 					);
 					return this.toSessionLike(session);
@@ -127,7 +128,7 @@ export class CopilotAuthManager {
 		const noSessionSummary = `${providerId}:${accounts.map(account => account.label).sort().join(',') || 'none'}`;
 		if (this.loggedAuthNoSessionSummary !== noSessionSummary) {
 			this.loggedAuthNoSessionSummary = noSessionSummary;
-			console.log(
+			debugLog(
 				`[Copilot Auth] No existing ${providerId} session matched Copilot scopes (accounts=${accounts.map(account => account.label).join(', ') || 'none'})`
 			);
 		}
@@ -161,7 +162,7 @@ export class CopilotAuthManager {
 		for (const scopes of COPILOT_SCOPE_SETS) {
 			const matchingSession = sessions.find(session => scopes.every(scope => session.scopes.includes(scope)));
 			if (matchingSession) {
-				console.log(
+				debugLog(
 					`[Copilot Auth] Reusing persisted ${providerId} session from VS Code secret storage scopes=${matchingSession.scopes.join(', ')}`
 				);
 				return matchingSession;
@@ -170,7 +171,7 @@ export class CopilotAuthManager {
 
 		const fallbackSession = sessions[0] ?? null;
 		if (fallbackSession) {
-			console.log(
+			debugLog(
 				`[Copilot Auth] Reusing persisted ${providerId} session with fallback scopes=${fallbackSession.scopes.join(', ')}`
 			);
 		}
@@ -200,7 +201,7 @@ export class CopilotAuthManager {
 			const summary = `${providerId}:${sessions.length}:${sessions.map(session => session.account.label).sort().join(',')}`;
 			if (sessions.length > 0 && this.loggedPersistedSessionSummary !== summary) {
 				this.loggedPersistedSessionSummary = summary;
-				console.log(
+				debugLog(
 					`[Copilot Auth] Loaded ${sessions.length} persisted ${providerId} session(s) from VS Code secret storage`
 				);
 			}
@@ -343,7 +344,7 @@ export class CopilotAuthManager {
 				this.persistedStateDbPath = candidate;
 				if (this.loggedPersistedStorageSummary !== candidate) {
 					this.loggedPersistedStorageSummary = candidate;
-					console.log(`[Copilot Auth] Found VS Code secret storage at ${candidate}`);
+					debugLog(`[Copilot Auth] Found VS Code secret storage at ${candidate}`);
 				}
 				return candidate;
 			} catch {
@@ -462,13 +463,13 @@ export class CopilotAuthManager {
 			);
 
 			if (session) {
-				console.log(
+				debugLog(
 					`[Copilot Auth] VS Code granted ${providerId} session access after non-silent fallback scopes=${session.scopes.join(', ')}`
 				);
 				return;
 			}
 
-			console.log(
+			debugLog(
 				`[Copilot Auth] Requested ${providerId} session access via VS Code Accounts menu (accounts=${accounts.map(account => account.label).join(', ') || 'none'})`
 			);
 		} catch (error) {

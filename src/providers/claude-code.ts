@@ -5,6 +5,7 @@ import * as https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AnthropicUsageResponse, parseClaudeUsageResponse } from './claude-code-parse';
+import { debugLog } from '../logger';
 
 const execAsync = promisify(exec);
 
@@ -120,20 +121,20 @@ export class ClaudeCodeProvider extends UsageProvider {
 	async getUsage(): Promise<UsageData | null> {
 		// Return cached data if still valid
 		if (this.cachedData && this.deps.now() < this.cacheExpiry) {
-			console.log('[ClaudeCode] Returning cached data');
+			debugLog('[ClaudeCode] Returning cached data');
 			return this.cachedData;
 		}
 
 		try {
 			const token = await this.getAuthToken();
-			console.log('[ClaudeCode] Got auth token:', token ? `${token.substring(0, 10)}...` : 'null');
+			debugLog('[ClaudeCode] Got auth token:', token ? `${token.substring(0, 10)}...` : 'null');
 			if (!token) {
-				console.log('[ClaudeCode] No auth token, returning null');
+				debugLog('[ClaudeCode] No auth token, returning null');
 				return null;
 			}
 
 			const usageData = await this.fetchUsageFromAPI(token);
-			console.log('[ClaudeCode] Fetched usage data:', usageData);
+			debugLog('[ClaudeCode] Fetched usage data:', usageData);
 			if (usageData) {
 				this.cachedData = usageData;
 				this.cacheExpiry = this.deps.now() + this.CACHE_TTL;
@@ -178,7 +179,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 	 * Fetch usage data from Anthropic OAuth API
 	 */
 	private async fetchUsageFromAPI(token: string): Promise<UsageData | null> {
-		console.log('[ClaudeCode] fetchUsageFromAPI called');
+		debugLog('[ClaudeCode] fetchUsageFromAPI called');
 		const response = await this.deps.request({
 			hostname: 'api.anthropic.com',
 			path: '/api/oauth/usage',

@@ -17,6 +17,7 @@ import {
 	summarizeStack
 } from './utils';
 import { CopilotParser } from './parse';
+import { debugError } from '../../logger';
 
 export class CopilotNetInterceptor {
 	private originalFetch?: typeof fetch;
@@ -50,7 +51,7 @@ export class CopilotNetInterceptor {
 					stack
 				);
 			} catch (error) {
-				console.error('[Copilot Net] Failed to inspect fetch response:', error);
+				debugError('[Copilot Net] Failed to inspect fetch response:', error);
 			}
 			return response;
 		}) as typeof fetch;
@@ -90,7 +91,7 @@ export class CopilotNetInterceptor {
 					stack
 				);
 			} catch (error) {
-				console.error('[Copilot Net] Failed to inspect https response:', error);
+				debugError('[Copilot Net] Failed to inspect https response:', error);
 			}
 		});
 	}

@@ -26,6 +26,7 @@ import { CopilotAuthManager } from './auth';
 import { CopilotParser } from './parse';
 import { CopilotProbeManager } from './probe';
 import { CopilotNetInterceptor } from './net';
+import { debugError, debugLog } from '../../logger';
 
 export class CopilotProvider extends UsageProvider {
 	private readonly deps: ResolvedCopilotProviderDeps;
@@ -112,7 +113,7 @@ export class CopilotProvider extends UsageProvider {
 		if (!this.currentSnapshot) {
 			if (!this.waitingForSignalLogged) {
 				this.waitingForSignalLogged = true;
-				console.log(
+				debugLog(
 					`[Copilot] Waiting for first numeric quota signal from VSCode Copilot (chatQuotaExceeded=${this.chatQuotaExceeded}, completionsQuotaExceeded=${this.completionsQuotaExceeded})`
 				);
 			}
@@ -154,7 +155,7 @@ export class CopilotProvider extends UsageProvider {
 		}
 
 		this.initialized = true;
-		console.log('[Copilot] Initializing VSCode Copilot provider');
+		debugLog('[Copilot] Initializing VSCode Copilot provider');
 
 		this.patchCommandExecution();
 		this.netInterceptor.patchFetch();
@@ -165,14 +166,14 @@ export class CopilotProvider extends UsageProvider {
 				return;
 			}
 
-			console.log(`[Copilot Auth] Authentication sessions changed for ${event.provider.id}`);
+			debugLog(`[Copilot Auth] Authentication sessions changed for ${event.provider.id}`);
 			this.authFetchExpiry = 0;
 			this.waitingForSignalLogged = false;
 			void this.refreshFromAuthentication('auth-change', true);
 		});
 
 		this.extensionsChangeDisposable = this.deps.vscodeApi.extensions.onDidChange(() => {
-			console.log('[Copilot Probe] VS Code extensions changed, re-running Copilot probe');
+			debugLog('[Copilot Probe] VS Code extensions changed, re-running Copilot probe');
 			this.waitingForSignalLogged = false;
 			void this.runExportProbe('extension-change');
 		});
@@ -224,7 +225,7 @@ export class CopilotProvider extends UsageProvider {
 		const sessionSummary = `${providerId}:${session.account.label}:${session.id}:${session.scopes.join(',')}`;
 		if (this.loggedAuthSessionSummary !== sessionSummary) {
 			this.loggedAuthSessionSummary = sessionSummary;
-			console.log(
+			debugLog(
 				`[Copilot Auth] Using ${providerId} session for ${session.account.label} scopes=${session.scopes.join(', ')}`
 			);
 		}
@@ -259,7 +260,7 @@ export class CopilotProvider extends UsageProvider {
 				const entitlementSummary = `${plan}:${sku}:${snapshot.surface}:${bucketsSummary}`;
 				if (this.loggedAuthEntitlementSummary !== entitlementSummary) {
 					this.loggedAuthEntitlementSummary = entitlementSummary;
-					console.log(
+					debugLog(
 						`[Copilot Auth] Resolved entitlement plan=${plan} sku=${sku} selected=${snapshot.surface} buckets=${bucketsSummary}`
 					);
 				}
@@ -325,7 +326,7 @@ export class CopilotProvider extends UsageProvider {
 			const next = Boolean(value);
 			if (this.chatQuotaExceeded !== next) {
 				this.chatQuotaExceeded = next;
-				console.log(`[Copilot Context] ${CHAT_QUOTA_CONTEXT_KEY}=${next}`);
+				debugLog(`[Copilot Context] ${CHAT_QUOTA_CONTEXT_KEY}=${next}`);
 			}
 			return;
 		}
@@ -334,7 +335,7 @@ export class CopilotProvider extends UsageProvider {
 			const next = Boolean(value);
 			if (this.completionsQuotaExceeded !== next) {
 				this.completionsQuotaExceeded = next;
-				console.log(`[Copilot Context] ${COMPLETIONS_QUOTA_CONTEXT_KEY}=${next}`);
+				debugLog(`[Copilot Context] ${COMPLETIONS_QUOTA_CONTEXT_KEY}=${next}`);
 			}
 		}
 	}
@@ -348,20 +349,20 @@ export class CopilotProvider extends UsageProvider {
 				: snapshot.source === 'export-probe'
 					? '[Copilot Probe]'
 					: '[Copilot Net]';
-			console.log(`${prefix} Observed ${snapshot.source} signal (${snapshot.surface}) from ${snapshot.detail}`);
+			debugLog(`${prefix} Observed ${snapshot.source} signal (${snapshot.surface}) from ${snapshot.detail}`);
 		}
 
 		this.currentSnapshot = snapshot;
 		this.waitingForSignalLogged = false;
 
 		if (snapshot.unlimited || snapshot.quota <= 0) {
-			console.log(
+			debugLog(
 				`[Copilot] Updated shared quota snapshot but hiding ${SERVICE_NAME} because the quota is unbounded (quota=${snapshot.quota}, unlimited=${snapshot.unlimited})`
 			);
 			return;
 		}
 
-		console.log(
+		debugLog(
 			`[Copilot] Updated shared quota snapshot (${snapshot.surface}) used=${Math.round(snapshot.used)}/${Math.round(snapshot.quota)} reset=${snapshot.resetDate?.toISOString() ?? 'unknown'} via ${snapshot.source}`
 		);
 	}
@@ -372,6 +373,6 @@ export class CopilotProvider extends UsageProvider {
 		}
 
 		this.loggedParseFailures.add(key);
-		console.error(message);
+		debugError(message);
 	}
 }

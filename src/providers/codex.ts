@@ -5,6 +5,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { CodexRateLimitsResponse, parseCodexRateLimitsResponse } from './codex-parse';
+import { debugLog } from '../logger';
 
 const execAsync = promisify(exec);
 
@@ -120,7 +121,7 @@ export class CodexProvider extends UsageProvider {
 			// Check if process exists and is codex app-server
 			const { stdout } = await this.deps.exec(`ps -p ${storedPid} -o command=`);
 			if (stdout.includes('codex') && stdout.includes('app-server')) {
-				console.log(`[Codex] Cleaning up orphaned codex app-server (PID ${storedPid})`);
+				debugLog(`[Codex] Cleaning up orphaned codex app-server (PID ${storedPid})`);
 				this.deps.kill(storedPid, 'SIGTERM');
 			}
 		} catch {
@@ -149,7 +150,7 @@ export class CodexProvider extends UsageProvider {
 
 			// Clear PID when process exits naturally
 			this.appServerProcess.on('exit', (code) => {
-				console.log(`[Codex] app-server exited with code ${code}`);
+				debugLog(`[Codex] app-server exited with code ${code}`);
 				this.context.globalState.update(this.PID_STORAGE_KEY, undefined);
 				this.appServerProcess = null;
 				this.isInitialized = false;
@@ -287,7 +288,7 @@ export class CodexProvider extends UsageProvider {
 	 */
 	dispose() {
 		if (this.appServerProcess) {
-			console.log(`[Codex] Disposing app-server (PID ${this.appServerProcess.pid})`);
+			debugLog(`[Codex] Disposing app-server (PID ${this.appServerProcess.pid})`);
 			this.appServerProcess.kill('SIGTERM');
 			this.context.globalState.update(this.PID_STORAGE_KEY, undefined);
 			this.appServerProcess = null;

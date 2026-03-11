@@ -11,7 +11,7 @@ import {
 	ResolvedCopilotProviderDeps
 } from './types';
 import { toFiniteNumber, toDate, classifySurfaceFromBucketName, isRecord } from './utils';
-import { QuotaWindowUsage } from '../types';
+import { QuotaWindowUsage } from '../../types';
 
 export class CopilotParser {
 	constructor(
