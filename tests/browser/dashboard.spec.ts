@@ -287,7 +287,6 @@ test('posts hide and settings actions back through the vscode bridge', async ({ 
 		{ type: 'setPollingInterval', interval: 120 },
 	]);
 });
-
 test('renders the VSCode Copilot toggle in settings', async ({ page }) => {
 	await loadHarness(page);
 	await pushState(page);

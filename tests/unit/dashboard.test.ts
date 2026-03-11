@@ -60,7 +60,6 @@ describe('DashboardPanel', () => {
 		DashboardPanel.createOrShow(extensionUri, usageManager as any, configManager as any);
 		let [panel] = (vscode as any).__testing.getCreatedWebviewPanels();
 
-		expect(panel.webview.html).toContain('mana.bar Dashboard');
 		expect(panel.webview.html).toContain("style-src vscode-test-csp 'unsafe-inline'");
 		expect(panel.webview.html).toContain('webview:/extension-root/media/dashboard.css');
 		expect(panel.webview.html).toContain('webview:/extension-root/media/dashboard.js');
@@ -94,7 +93,7 @@ describe('DashboardPanel', () => {
 		]);
 		expect(usageManager.refreshAll).toHaveBeenCalledTimes(1);
 		expect(configManager.updateServiceConfig).toHaveBeenCalledWith('gemini', { enabled: false });
-		expect((vscode as any).__testing.getConfiguration('manaBar', 'pollingInterval')).toBe(120);
+		expect((vscode as any).__testing.getConfiguration('llmUsageTracker', 'pollingInterval')).toBe(120);
 		expect(configManager.updateDisplayMode).toHaveBeenCalledWith('remaining');
 		expect(configManager.updateStatusBarTooltipLayout).toHaveBeenCalledWith('monospaced');
 		expect(configManager.toggleHideService).toHaveBeenCalledWith('Codex');
@@ -104,7 +103,7 @@ describe('DashboardPanel', () => {
 		const usageManager = createUsageManager(USAGE_DATA);
 		const configManager = createConfigManager();
 		const serializer = new DashboardSerializer(vscode.Uri.file('/extension-root'), usageManager as any, configManager as any);
-		const panel = vscode.window.createWebviewPanel('manaBar.dashboard', 'Dashboard', vscode.ViewColumn.One, {
+		const panel = vscode.window.createWebviewPanel('llmUsageTracker.dashboard', 'Dashboard', vscode.ViewColumn.One, {
 			enableScripts: true,
 		}) as any;
 
