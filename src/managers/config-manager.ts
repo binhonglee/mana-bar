@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ServiceConfig, ServicesConfig, UsageDisplayMode } from '../types';
+import { ServiceConfig, ServicesConfig, StatusBarTooltipLayout, UsageDisplayMode } from '../types';
 
 /**
  * Manages extension configuration
@@ -23,6 +23,10 @@ export class ConfigManager {
 
 	getDisplayMode(): UsageDisplayMode {
 		return this.getConfig().get<UsageDisplayMode>('displayMode', 'used');
+	}
+
+	getStatusBarTooltipLayout(): StatusBarTooltipLayout {
+		return this.getConfig().get<StatusBarTooltipLayout>('statusBarTooltipLayout', 'regular');
 	}
 
 	/**
@@ -56,6 +60,10 @@ export class ConfigManager {
 
 	async updateDisplayMode(mode: UsageDisplayMode): Promise<void> {
 		await this.getConfig().update('displayMode', mode, vscode.ConfigurationTarget.Global);
+	}
+
+	async updateStatusBarTooltipLayout(layout: StatusBarTooltipLayout): Promise<void> {
+		await this.getConfig().update('statusBarTooltipLayout', layout, vscode.ConfigurationTarget.Global);
 	}
 
 	/**

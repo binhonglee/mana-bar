@@ -92,7 +92,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 		return allUsage.map(usage => {
 			const status = getUsageStatus(usage.totalUsed, usage.totalLimit);
 			const icon = status === UsageStatus.CRITICAL ? 'error' :
-						 status === UsageStatus.WARNING ? 'warning' : 'pass';
+				status === UsageStatus.WARNING ? 'warning' : 'pass';
 
 			const display = formatUsageDisplay(usage.totalUsed, usage.totalLimit, displayMode);
 
@@ -146,15 +146,6 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 				));
 			}
 		}
-
-		// Last updated
-		const updatedStr = usage.lastUpdated.toLocaleTimeString();
-		items.push(new UsageTreeItem(
-			'Last updated',
-			updatedStr,
-			vscode.TreeItemCollapsibleState.None,
-			new vscode.ThemeIcon('sync')
-		));
 
 		return items;
 	}

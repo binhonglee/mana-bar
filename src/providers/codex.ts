@@ -1,32 +1,12 @@
 import { UsageProvider } from './base';
-import { QuotaWindowUsage, UsageData } from '../types';
+import { UsageData } from '../types';
 import { spawn, ChildProcess } from 'child_process';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
+import { CodexRateLimitsResponse, parseCodexRateLimitsResponse } from './codex-parse';
 
 const execAsync = promisify(exec);
-
-/**
- * Codex app-server JSON-RPC response structures
- */
-interface CodexRateLimitsResponse {
-	id: number;
-	result: {
-		rateLimits: {
-			primary: {
-				usedPercent: number;
-				windowDurationMins: number;
-				resetsAt: number; // Unix timestamp in seconds
-			};
-			secondary?: {
-				usedPercent: number;
-				windowDurationMins: number;
-				resetsAt: number;
-			} | null;
-		};
-	};
-}
 
 /**
  * Provider for Codex usage tracking
@@ -276,68 +256,7 @@ export class CodexProvider extends UsageProvider {
 	 * Parse rate limits response into our UsageData format
 	 */
 	private parseRateLimitsResponse(response: CodexRateLimitsResponse): UsageData {
-		const { primary, secondary } = response.result.rateLimits;
-
-		// Show whichever limit has higher utilization (closer to hitting the limit)
-		// Special case: if both at/near limit, show the one with longer cooldown
-		const primaryUtil = primary?.usedPercent || 0;
-		const secondaryUtil = secondary?.usedPercent || 0;
-
-		let useSecondary = secondaryUtil > primaryUtil;
-
-		// Edge case: if both are at or very near the limit (>= 95%)
-		// show whichever has the longer cooldown (later reset time)
-		if (primaryUtil >= 95 && secondaryUtil >= 95 && secondary) {
-			const primaryReset = new Date(primary.resetsAt * 1000);
-			const secondaryReset = new Date(secondary.resetsAt * 1000);
-			// Use the one with the later reset time (longer wait)
-			useSecondary = secondaryReset > primaryReset;
-		}
-
-		const selectedLimit = (useSecondary && secondary) ? secondary : primary;
-		const totalUsed = Math.round(selectedLimit.usedPercent);
-		const resetTime = new Date(selectedLimit.resetsAt * 1000);
-		const quotaWindows: QuotaWindowUsage[] = [primary, secondary]
-			.filter((limit): limit is NonNullable<typeof limit> => limit !== null && limit !== undefined)
-			.map(limit => ({
-				label: this.formatWindowLabel(limit.windowDurationMins),
-				used: Math.round(limit.usedPercent),
-				limit: 100,
-				resetTime: new Date(limit.resetsAt * 1000)
-			}));
-
-		return {
-			serviceName: this.getServiceName(),
-			totalUsed,
-			totalLimit: 100, // usedPercent is already a percentage
-			resetTime,
-			quotaWindows: quotaWindows.length > 0 ? quotaWindows : undefined,
-			models: [], // API doesn't provide per-model breakdown
-			lastUpdated: new Date()
-		};
-	}
-
-	private formatWindowLabel(windowDurationMins: number): string {
-		const minutesPerHour = 60;
-		const minutesPerDay = 24 * minutesPerHour;
-		const minutesPerWeek = 7 * minutesPerDay;
-
-		if (windowDurationMins % minutesPerWeek === 0) {
-			const weeks = windowDurationMins / minutesPerWeek;
-			return `${weeks} Week${weeks === 1 ? '' : 's'}`;
-		}
-
-		if (windowDurationMins % minutesPerDay === 0) {
-			const days = windowDurationMins / minutesPerDay;
-			return `${days} Day${days === 1 ? '' : 's'}`;
-		}
-
-		if (windowDurationMins % minutesPerHour === 0) {
-			const hours = windowDurationMins / minutesPerHour;
-			return `${hours} Hour${hours === 1 ? '' : 's'}`;
-		}
-
-		return `${windowDurationMins} Min`;
+		return parseCodexRateLimitsResponse(response, this.getServiceName(), new Date());
 	}
 
 	/**

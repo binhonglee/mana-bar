@@ -9,6 +9,7 @@ export interface ModelUsage {
 }
 
 export type UsageDisplayMode = 'used' | 'remaining';
+export type StatusBarTooltipLayout = 'regular' | 'monospaced';
 
 /**
  * Usage data for a quota window, such as 5-hour or 7-day limits

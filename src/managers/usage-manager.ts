@@ -11,6 +11,25 @@ interface CacheEntry {
 	expiresAt: number;
 }
 
+export function getServiceConfigKey(serviceName: string): 'claudeCode' | 'codex' | 'antigravity' | 'gemini' {
+	const normalized = serviceName.toLowerCase().replace(/\s+/g, '');
+
+	if (serviceName.startsWith('AG ') || serviceName.startsWith('Antigravity')) {
+		return 'antigravity';
+	}
+	if (serviceName.startsWith('Gemini')) {
+		return 'gemini';
+	}
+
+	switch (normalized) {
+		case 'claudecode': return 'claudeCode';
+		case 'codex': return 'codex';
+		case 'antigravity': return 'antigravity';
+		case 'gemini': return 'gemini';
+		default: return 'claudeCode';
+	}
+}
+
 /**
  * Manages all usage providers, polling, and caching
  */
@@ -39,6 +58,10 @@ export class UsageManager {
 	registerProvider(provider: UsageProvider): void {
 		const serviceName = provider.getServiceName();
 		this.providers.set(serviceName, provider);
+	}
+
+	getRegisteredServiceNames(): string[] {
+		return [...this.providers.keys()].sort((a, b) => this.serviceNameCollator.compare(a, b));
 	}
 
 	/**
@@ -75,7 +98,7 @@ export class UsageManager {
 
 		for (const [serviceName, provider] of this.providers) {
 			// Map service names to config keys
-			const configKey = this.getConfigKey(serviceName);
+			const configKey = getServiceConfigKey(serviceName);
 			const serviceConfig = servicesConfig[configKey];
 
 			console.log(`[UsageManager] Checking ${serviceName}: enabled=${serviceConfig?.enabled}`);
@@ -159,26 +182,6 @@ export class UsageManager {
 	/**
 	 * Map service name to config key
 	 */
-	private getConfigKey(serviceName: string): 'claudeCode' | 'codex' | 'antigravity' | 'gemini' {
-		const normalized = serviceName.toLowerCase().replace(/\s+/g, '');
-
-		// Handle Antigravity quota group sub-providers (e.g., "AG Gemini 2.0" -> "antigravity")
-		if (serviceName.startsWith('AG ') || serviceName.startsWith('Antigravity')) {
-			return 'antigravity';
-		}
-		if (serviceName.startsWith('Gemini')) {
-			return 'gemini';
-		}
-
-		switch (normalized) {
-			case 'claudecode': return 'claudeCode';
-			case 'codex': return 'codex';
-			case 'antigravity': return 'antigravity';
-			case 'gemini': return 'gemini';
-			default: return 'claudeCode';
-		}
-	}
-
 	/**
 	 * Dispose resources
 	 */

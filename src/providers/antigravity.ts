@@ -4,6 +4,13 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import {
+	filterAntigravityModelsInGroup,
+	getAntigravityGroupName,
+	groupAntigravityModelsByQuota,
+	parseAntigravityQuotaForGroup,
+	resolveAntigravityAutoGroupFamily,
+} from './antigravity-parse';
 
 /**
  * Antigravity API response structures
@@ -355,51 +362,7 @@ export class AntigravityProvider extends UsageProvider {
 	 * Group models by quota pool (tagTitle)
 	 */
 	private groupModelsByQuota(response: AuthorizedQuotaResponse): Map<string, ModelInfo[]> {
-		const groups = new Map<string, ModelInfo[]>();
-
-		const allowedModelIds = new Set<string>();
-		for (const sort of response.agentModelSorts || []) {
-			for (const group of sort.groups || []) {
-				for (const id of group.modelIds || []) {
-					allowedModelIds.add(id.toLowerCase());
-				}
-			}
-		}
-
-		// ALWAYS include image models just in case
-		allowedModelIds.add('model_placeholder_m9');
-		allowedModelIds.add('gemini-3-pro-image');
-
-		for (const [modelId, modelInfo] of Object.entries(response.models || {})) {
-			if (modelInfo.disabled || modelInfo.isInternal) {
-				continue;
-			}
-
-			if (!modelInfo.quotaInfo) {
-				continue;
-			}
-
-			// Skip internal/experimental models without proper display names
-			// (e.g. chat_20706, tab_flash_lite_preview)
-			if (!modelInfo.displayName || modelId.startsWith('tab_') || modelId.startsWith('chat_')) {
-				continue;
-			}
-
-
-			if (allowedModelIds.size > 2 && !allowedModelIds.has(modelId.toLowerCase())) {
-				continue; // Not in the allowlist
-			}
-
-			const family = this.resolveAutoGroupFamily(modelInfo.model || modelId, modelInfo.displayName);
-			const groupName = this.getGroupName(family);
-
-			if (!groups.has(groupName)) {
-				groups.set(groupName, []);
-			}
-			groups.get(groupName)!.push(modelInfo);
-		}
-
-		return groups;
+		return groupAntigravityModelsByQuota(response);
 	}
 
 	private normalizeGroupMatchText(value: string | undefined): string {
@@ -411,59 +374,11 @@ export class AntigravityProvider extends UsageProvider {
 	}
 
 	public resolveAutoGroupFamily(modelId: string, label?: string): string {
-		const modelIdLower = (modelId || '').toLowerCase();
-		const labelText = this.normalizeGroupMatchText(label || modelId || '');
-
-		if (
-			/^gemini-\d+(?:\.\d+)?-pro-image(?:-|$)/.test(modelIdLower)
-			|| /^gemini \d+(?:\.\d+)? pro image\b/.test(labelText)
-			|| modelIdLower === 'model_placeholder_m9'
-		) {
-			return 'gemini_image';
-		}
-
-		if (
-			/^gemini-\d+(?:\.\d+)?-pro-(high|low)(?:-|$)/.test(modelIdLower)
-			|| /^gemini \d+(?:\.\d+)? pro(?: \((high|low)\)| (high|low))\b/.test(labelText)
-			|| modelIdLower === 'model_placeholder_m7'
-			|| modelIdLower === 'model_placeholder_m8'
-			|| modelIdLower === 'model_placeholder_m36'
-			|| modelIdLower === 'model_placeholder_m37'
-		) {
-			return 'gemini_pro';
-		}
-
-		if (
-			/^gemini-\d+(?:\.\d+)?-flash(?:-|$)/.test(modelIdLower)
-			|| /^gemini \d+(?:\.\d+)? flash\b/.test(labelText)
-			|| modelIdLower === 'model_placeholder_m18'
-		) {
-			return 'gemini_flash';
-		}
-
-		if (
-			modelIdLower.startsWith('claude-')
-			|| modelIdLower.startsWith('model_claude')
-			|| labelText.startsWith('claude ')
-			|| modelIdLower === 'model_placeholder_m12'
-			|| modelIdLower === 'model_placeholder_m26'
-			|| modelIdLower === 'model_placeholder_m35'
-			|| modelIdLower === 'model_openai_gpt_oss_120b_medium'
-		) {
-			return 'claude';
-		}
-
-		return 'default';
+		return resolveAntigravityAutoGroupFamily(modelId, label);
 	}
 
 	public getGroupName(family: string): string {
-		switch (family) {
-			case 'gemini_image': return 'Gemini Image';
-			case 'gemini_pro': return 'Gemini Pro';
-			case 'gemini_flash': return 'Gemini Flash';
-			case 'claude': return 'Claude';
-			default: return 'Default';
-		}
+		return getAntigravityGroupName(family);
 	}
 
 	/**
@@ -577,78 +492,10 @@ class AntigravityQuotaGroupProvider extends UsageProvider {
 	}
 
 	private filterModelsInGroup(response: AuthorizedQuotaResponse): ModelInfo[] {
-		const filtered: ModelInfo[] = [];
-
-		const allowedModelIds = new Set<string>();
-		for (const sort of response.agentModelSorts || []) {
-			for (const group of sort.groups || []) {
-				for (const id of group.modelIds || []) {
-					allowedModelIds.add(id.toLowerCase());
-				}
-			}
-		}
-
-		// ALWAYS include image models just in case
-		allowedModelIds.add('model_placeholder_m9');
-		allowedModelIds.add('gemini-3-pro-image');
-
-		for (const [modelId, modelInfo] of Object.entries(response.models || {})) {
-			// Skip internal/experimental models without proper display names
-			if (!modelInfo.displayName || modelId.startsWith('tab_') || modelId.startsWith('chat_') || modelInfo.isInternal) {
-				continue;
-			}
-
-
-			if (allowedModelIds.size > 2 && !allowedModelIds.has(modelId.toLowerCase())) {
-				continue; // Not in the allowlist
-			}
-
-			const family = this.parent.resolveAutoGroupFamily?.(modelInfo.model || modelId, modelInfo.displayName) || 'default';
-			const group = this.parent.getGroupName?.(family) || 'Default';
-
-			if (group === this.groupName && modelInfo.quotaInfo && !modelInfo.disabled) {
-				filtered.push(modelInfo);
-			}
-		}
-		return filtered;
+		return filterAntigravityModelsInGroup(response, this.groupName);
 	}
 
 	private parseQuotaForGroup(groupModels: ModelInfo[]): UsageData {
-		let maxUsedPercent = 0;
-		let earliestReset: Date | null = null;
-		const models: import('../types').ModelUsage[] = [];
-
-		for (const modelInfo of groupModels) {
-			if (!modelInfo.quotaInfo) continue;
-
-			const remaining = modelInfo.quotaInfo.remainingFraction || 0;
-			const used = (1 - remaining) * 100;
-			const resetTime = new Date(modelInfo.quotaInfo.resetTime || 0);
-
-			if (used > maxUsedPercent) {
-				maxUsedPercent = used;
-			}
-
-			if (!earliestReset || resetTime < earliestReset) {
-				earliestReset = resetTime;
-			}
-
-			models.push({
-				modelName: modelInfo.displayName || modelInfo.model || 'Unknown',
-				used: Math.round(used),
-				limit: 100,
-				resetTime
-			});
-		}
-
-		return {
-			serviceName: this.getServiceName(),
-			totalUsed: Math.round(maxUsedPercent),
-			totalLimit: 100,
-			resetTime: earliestReset || new Date(),
-			progressSegments: 5,
-			models,
-			lastUpdated: new Date()
-		};
+		return parseAntigravityQuotaForGroup(this.getServiceName(), groupModels, new Date());
 	}
 }

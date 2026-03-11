@@ -69,6 +69,7 @@ function getNonce(): string {
 export class DashboardPanel {
 	public static currentPanel: DashboardPanel | undefined;
 	private static readonly viewType = 'llmUsageTracker.dashboard';
+	private static panelCreateCount = 0;
 
 	private readonly _panel: vscode.WebviewPanel;
 	private readonly _extensionUri: vscode.Uri;
@@ -98,6 +99,7 @@ export class DashboardPanel {
 			}
 		);
 
+		DashboardPanel.panelCreateCount += 1;
 		DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, usageManager, configManager);
 	}
 
@@ -107,7 +109,15 @@ export class DashboardPanel {
 		usageManager: UsageManager,
 		configManager: ConfigManager
 	): void {
+		DashboardPanel.panelCreateCount += 1;
 		DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, usageManager, configManager);
+	}
+
+	public static getDebugState(): { isOpen: boolean; createCount: number } {
+		return {
+			isOpen: Boolean(DashboardPanel.currentPanel),
+			createCount: DashboardPanel.panelCreateCount,
+		};
 	}
 
 	private constructor(
@@ -157,6 +167,7 @@ export class DashboardPanel {
 			type: 'configUpdate',
 			config: {
 				displayMode: this._configManager.getDisplayMode(),
+				statusBarTooltipLayout: this._configManager.getStatusBarTooltipLayout(),
 				pollingInterval: this._configManager.getPollingInterval(),
 				services: this._configManager.getServicesConfig(),
 				hiddenServices: this._configManager.getHiddenServices(),
@@ -186,6 +197,9 @@ export class DashboardPanel {
 				break;
 			case 'setDisplayMode':
 				this._configManager.updateDisplayMode(message.mode);
+				break;
+			case 'setStatusBarTooltipLayout':
+				this._configManager.updateStatusBarTooltipLayout(message.layout);
 				break;
 			case 'toggleHideService':
 				this._configManager.toggleHideService(message.service);
@@ -226,7 +240,6 @@ export class DashboardPanel {
 					<path d="M13.451 5.609l-.579-.939-1.068.812-.076.094c.335.57.528 1.236.528 1.949 0 2.044-1.58 3.713-3.574 3.86l.203-.203.071-.087-.008-.112-.088-.071-.112.008-1 1-.071.087.008.112.087.071 1 1 .112.008.087-.071.071-.087-.008-.112-.071-.087-.169-.169c2.345-.176 4.186-2.133 4.186-4.512 0-.956-.292-1.843-.793-2.576l.254-.193zM7.744 3.525l-.203.203-.071.087.008.112.088.071.112-.008 1-1 .071-.087-.008-.112L8.654 2.72l-1-1-.112-.008-.087.071-.071.087.008.112.071.087.169.169C5.326 2.414 3.486 4.37 3.486 6.75c0 .956.292 1.843.793 2.576l-.254.193.579.939 1.068-.812.076-.094A3.893 3.893 0 015.22 7.603c0-2.044 1.58-3.713 3.574-3.86l-.203.203-.071.087.008.112.088.071.112-.008 1-1 .071-.087-.008-.112-.087-.071-1-1-.112-.008-.087.071-.071.087.008.112.071.087.169.169z"/>
 				</svg>
 			</button>
-			<span id="last-updated" class="last-updated"></span>
 		</div>
 	</header>
 
@@ -270,6 +283,20 @@ export class DashboardPanel {
 							<select id="display-mode-select" class="setting-select">
 								<option value="used">Used</option>
 								<option value="remaining">Remaining</option>
+							</select>
+						</div>
+					</div>
+				</div>
+				<div class="setting-card">
+					<div class="setting-row">
+						<div class="setting-info">
+							<span class="setting-label">Status bar hover</span>
+							<span class="setting-hint">Choose between the regular layout and the fixed-width monospaced layout.</span>
+						</div>
+						<div class="select-group">
+							<select id="status-bar-tooltip-layout-select" class="setting-select">
+								<option value="regular">Regular</option>
+								<option value="monospaced">Monospaced</option>
 							</select>
 						</div>
 					</div>
@@ -319,7 +346,7 @@ export class DashboardSerializer implements vscode.WebviewPanelSerializer {
 		private readonly extensionUri: vscode.Uri,
 		private readonly usageManager: UsageManager,
 		private readonly configManager: ConfigManager
-	) {}
+	) { }
 
 	async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: any): Promise<void> {
 		panel.webview.options = {

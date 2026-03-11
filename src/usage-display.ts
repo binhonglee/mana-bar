@@ -38,10 +38,6 @@ export function formatUsageDisplay(used: number, limit: number, mode: UsageDispl
 	return limit === 100 ? `${value}%` : `${value}/${limit}`;
 }
 
-export function getDisplayModeLabel(mode: UsageDisplayMode): string {
-	return mode === 'remaining' ? 'Left' : 'Usage';
-}
-
 export function getDisplayModeVerb(mode: UsageDisplayMode): string {
 	return mode === 'remaining' ? 'left' : 'used';
 }

@@ -6,6 +6,13 @@ import { promisify } from 'util';
 import { UsageProvider } from './base';
 import { UsageData, ModelUsage } from '../types';
 import { fileExists, getHomeDir, joinPath, readJsonFile } from '../utils';
+import {
+	extractGeminiModelsFromDefaultConfigs,
+	extractValidGeminiModels,
+	humanizeGeminiModelLabel,
+	normalizeGeminiQuotaBuckets,
+	uniqueGeminiModelIds,
+} from './gemini-parse';
 
 const execAsync = promisify(exec);
 
@@ -341,12 +348,7 @@ export class GeminiProvider extends UsageProvider {
 
 		try {
 			const module = await import(pathToFileURL(modelsFile).href) as GeminiModelsModule;
-			const visibleModels = module.VALID_GEMINI_MODELS;
-			if (!(visibleModels instanceof Set)) {
-				return [];
-			}
-
-			return this.uniqueModelIds([...visibleModels]);
+			return extractValidGeminiModels(module);
 		} catch (error) {
 			console.warn('[Gemini] Failed to load VALID_GEMINI_MODELS:', error);
 			return [];
@@ -360,16 +362,7 @@ export class GeminiProvider extends UsageProvider {
 
 		try {
 			const module = await import(pathToFileURL(defaultModelConfigsFile).href) as GeminiDefaultModelConfigsModule;
-			const aliases = module.DEFAULT_MODEL_CONFIGS?.aliases;
-			if (!aliases) {
-				return [];
-			}
-
-			return this.uniqueModelIds(
-				Object.entries(aliases)
-					.filter(([alias, config]) => alias.startsWith('gemini-') && config.modelConfig?.model === alias)
-					.map(([alias]) => alias)
-			);
+			return extractGeminiModelsFromDefaultConfigs(module);
 		} catch (error) {
 			console.warn('[Gemini] Failed to load defaultModelConfigs fallback:', error);
 			return [];
@@ -377,72 +370,18 @@ export class GeminiProvider extends UsageProvider {
 	}
 
 	private uniqueModelIds(modelIds: string[]): string[] {
-		const ordered = new Set<string>();
-		for (const modelId of modelIds) {
-			if (!modelId || !modelId.startsWith('gemini-')) {
-				continue;
-			}
-			ordered.add(modelId);
-		}
-		return [...ordered];
+		return uniqueGeminiModelIds(modelIds);
 	}
 
 	private normalizeBuckets(
 		buckets: GeminiQuotaBucket[],
 		allowedModelIds: Set<string> | null
 	): GeminiQuotaBucket[] {
-		const orderedModelIds: string[] = [];
-		const selectedBuckets = new Map<string, GeminiQuotaBucket>();
-
-		for (const bucket of buckets) {
-			const modelId = bucket.modelId;
-			if (!modelId) {
-				continue;
-			}
-
-			if (allowedModelIds && !allowedModelIds.has(modelId)) {
-				continue;
-			}
-
-			if (!selectedBuckets.has(modelId)) {
-				selectedBuckets.set(modelId, bucket);
-				orderedModelIds.push(modelId);
-				continue;
-			}
-
-			const existing = selectedBuckets.get(modelId)!;
-			if (existing.tokenType === 'REQUESTS') {
-				continue;
-			}
-			if (bucket.tokenType === 'REQUESTS') {
-				selectedBuckets.set(modelId, bucket);
-			}
-		}
-
-		return orderedModelIds
-			.map(modelId => selectedBuckets.get(modelId))
-			.filter((bucket): bucket is GeminiQuotaBucket => Boolean(bucket));
+		return normalizeGeminiQuotaBuckets(buckets, allowedModelIds);
 	}
 
 	private humanizeModelLabel(modelId: string): string {
-		const suffix = modelId.replace(/^gemini-/, '');
-		const tokens = suffix.split(/[-_]+/).filter(Boolean);
-
-		return tokens.map(token => {
-			if (/^\d+(?:\.\d+)?$/.test(token)) {
-				return token;
-			}
-
-			switch (token.toLowerCase()) {
-				case 'pro': return 'Pro';
-				case 'flash': return 'Flash';
-				case 'lite': return 'Lite';
-				case 'preview': return 'Preview';
-				case 'vertex': return 'Vertex';
-				case 'customtools': return 'Custom Tools';
-				default: return token.charAt(0).toUpperCase() + token.slice(1);
-			}
-		}).join(' ');
+		return humanizeGeminiModelLabel(modelId);
 	}
 
 	private async getGeminiBinaryPath(): Promise<string | null> {

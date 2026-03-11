@@ -42,6 +42,7 @@
 		setupRefreshButton();
 		setupGoSettingsButton();
 		setupDisplayModeSelect();
+		setupStatusBarTooltipLayoutSelect();
 		setupPollingSlider();
 
 		// Render from persisted state if available
@@ -63,9 +64,7 @@
 		switch (message.type) {
 			case 'usageUpdate':
 				state.usageData = message.data;
-				state.lastUpdated = message.timestamp;
 				renderDashboard();
-				updateLastUpdated();
 				persistState();
 				break;
 			case 'configUpdate':
@@ -164,17 +163,20 @@
 		});
 	}
 
+	function setupStatusBarTooltipLayoutSelect() {
+		const select = document.getElementById('status-bar-tooltip-layout-select');
+		if (!select) return;
+
+		select.addEventListener('change', () => {
+			vscode.postMessage({
+				type: 'setStatusBarTooltipLayout',
+				layout: select.value,
+			});
+		});
+	}
+
 	// ============ Last Updated ============
 
-	function updateLastUpdated() {
-		const el = document.getElementById('last-updated');
-		if (!el || !state.lastUpdated) return;
-		const time = new Date(state.lastUpdated).toLocaleTimeString([], {
-			hour: '2-digit',
-			minute: '2-digit',
-		});
-		el.textContent = 'Updated ' + time;
-	}
 
 	// ============ Dashboard Rendering ============
 
@@ -376,7 +378,7 @@
 			return `
 				<div class="quota-window status-${status}">
 					<div class="quota-window-header">
-						<span class="quota-window-label">${escapeHtml(window.label)}</span>
+						<span class="quota-window-label" title="${escapeHtml(window.label)}" aria-label="${escapeHtml(window.label)}">${escapeHtml(window.label)}</span>
 						<span class="quota-window-value">${formatUsageDisplay(window.used, window.limit)}</span>
 					</div>
 					<div class="quota-window-track">
@@ -462,8 +464,8 @@
 		const isHidden = isServiceHidden(data.serviceName);
 
 		card.innerHTML = `
-			<div class="card-header">
-				<span class="service-name">${escapeHtml(data.serviceName)}</span>
+			<div class="card-header" title="${escapeHtml(data.serviceName)}">
+				<span class="service-name" aria-label="${escapeHtml(data.serviceName)}">${escapeHtml(data.serviceName)}</span>
 				<button class="card-hide-btn" title="${isHidden ? 'Show' : 'Hide'}" data-service="${escapeHtml(data.serviceName)}">
 					${isHidden ? eyeOffIcon() : eyeIcon()}
 				</button>
@@ -526,7 +528,7 @@
 	function renderModelRows(models) {
 		if (!models || models.length === 0) return '';
 		return models.map(m => `
-			<div class="model-row" title="${escapeHtml(m.modelName)}">${escapeHtml(m.modelName)}</div>
+			<div class="model-row" title="${escapeHtml(m.modelName)}" aria-label="${escapeHtml(m.modelName)}">${escapeHtml(m.modelName)}</div>
 		`).join('');
 	}
 
@@ -639,6 +641,11 @@
 		const displayModeSelect = document.getElementById('display-mode-select');
 		if (displayModeSelect) {
 			displayModeSelect.value = state.config.displayMode || 'used';
+		}
+
+		const statusBarTooltipLayoutSelect = document.getElementById('status-bar-tooltip-layout-select');
+		if (statusBarTooltipLayoutSelect) {
+			statusBarTooltipLayoutSelect.value = state.config.statusBarTooltipLayout || 'regular';
 		}
 	}
 

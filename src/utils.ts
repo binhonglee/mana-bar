@@ -41,7 +41,7 @@ export function joinPath(...paths: string[]): string {
 }
 
 /**
- * Format time until reset (e.g., "2h 15m", "45m", "Just now")
+ * Format time until reset (e.g., "2d 5h", "2h 15m", "45m", "Just now")
  */
 export function formatTimeUntilReset(resetTime: Date): string {
 	const now = new Date();
@@ -51,8 +51,13 @@ export function formatTimeUntilReset(resetTime: Date): string {
 		return 'Just now';
 	}
 
+	const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 	const hours = Math.floor(diff / (1000 * 60 * 60));
 	const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+	if (days > 0) {
+		return `${days}d ${hours % 24}h`;
+	}
 
 	if (hours > 0) {
 		return `${hours}h ${minutes}m`;

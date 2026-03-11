@@ -1,32 +1,12 @@
 import { UsageProvider } from './base';
-import { QuotaWindowUsage, UsageData } from '../types';
+import { UsageData } from '../types';
 import { fileExists, readJsonFile, joinPath, getHomeDir } from '../utils';
 import * as https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { AnthropicUsageResponse, parseClaudeUsageResponse } from './claude-code-parse';
 
 const execAsync = promisify(exec);
-
-/**
- * Anthropic OAuth usage API response
- * Actual structure from API (as of 2026-03-09)
- */
-interface AnthropicUsageResponse {
-	five_hour?: {
-		utilization: number; // Percentage out of 100
-		resets_at: string;
-	};
-	seven_day?: {
-		utilization: number; // Percentage out of 100
-		resets_at: string;
-	};
-	extra_usage?: {
-		is_enabled: boolean;
-		monthly_limit: number;
-		used_credits: number;
-		utilization: number | null;
-	};
-}
 
 /**
  * Credentials structure from ~/.claude/.credentials.json
@@ -191,58 +171,6 @@ export class ClaudeCodeProvider extends UsageProvider {
 	 * Parse Anthropic API response into our UsageData format
 	 */
 	private parseUsageResponse(response: AnthropicUsageResponse): UsageData {
-		// Show whichever limit has higher utilization (closer to hitting the limit)
-		// Special case: if both at/near limit, show the one with longer cooldown
-		const fiveHour = response.five_hour;
-		const sevenDay = response.seven_day;
-
-		const fiveHourUtil = fiveHour?.utilization || 0;
-		const sevenDayUtil = sevenDay?.utilization || 0;
-
-		let useSevenDay = sevenDayUtil > fiveHourUtil;
-
-		// Edge case: if both are at or very near the limit (>= 95%)
-		// show whichever has the longer cooldown (later reset time)
-		if (fiveHourUtil >= 95 && sevenDayUtil >= 95) {
-			const fiveHourReset = fiveHour?.resets_at ? new Date(fiveHour.resets_at) : new Date(0);
-			const sevenDayReset = sevenDay?.resets_at ? new Date(sevenDay.resets_at) : new Date(0);
-			// Use the one with the later reset time (longer wait)
-			useSevenDay = sevenDayReset > fiveHourReset;
-		}
-
-		const totalUsed = Math.round(useSevenDay ? sevenDayUtil : fiveHourUtil);
-		const totalLimit = 100; // Utilization is already a percentage
-		const resetTime = useSevenDay
-			? (sevenDay?.resets_at ? new Date(sevenDay.resets_at) : undefined)
-			: (fiveHour?.resets_at ? new Date(fiveHour.resets_at) : undefined);
-		const quotaWindows: QuotaWindowUsage[] = [];
-
-		if (fiveHour) {
-			quotaWindows.push({
-				label: '5 Hour',
-				used: Math.round(fiveHourUtil),
-				limit: 100,
-				resetTime: fiveHour.resets_at ? new Date(fiveHour.resets_at) : undefined
-			});
-		}
-
-		if (sevenDay) {
-			quotaWindows.push({
-				label: '7 Day',
-				used: Math.round(sevenDayUtil),
-				limit: 100,
-				resetTime: sevenDay.resets_at ? new Date(sevenDay.resets_at) : undefined
-			});
-		}
-
-		return {
-			serviceName: this.getServiceName(),
-			totalUsed,
-			totalLimit,
-			resetTime,
-			quotaWindows: quotaWindows.length > 0 ? quotaWindows : undefined,
-			models: [],
-			lastUpdated: new Date()
-		};
+		return parseClaudeUsageResponse(response, this.getServiceName(), new Date());
 	}
 }
