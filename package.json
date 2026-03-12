@@ -2,7 +2,7 @@
   "name": "mana-bar",
   "displayName": "mana.bar",
   "description": "Track usage limits across multiple LLM services (Claude Code, Codex, VSCode Copilot, Antigravity, Gemini)",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "binhonglee",
   "engines": {
     "vscode": "^1.93.0"

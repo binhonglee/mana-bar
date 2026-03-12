@@ -5,7 +5,7 @@ import { CodexProvider } from './providers/codex';
 import { CopilotProvider } from './providers/copilot';
 import { AntigravityProvider } from './providers/antigravity';
 import { GeminiProvider } from './providers/gemini';
-import { TestProviderHarness } from './testing/fake-providers';
+import type { TestProviderHarness } from './testing/fake-providers';
 import { UsageProvider } from './providers/base';
 import { ServiceId } from './types';
 import { getServiceDescriptor } from './services';
@@ -78,6 +78,7 @@ export async function registerUsageProviders(
 	}
 ): Promise<ProviderRegistrationResult> {
 	if (options?.testMode) {
+		const { TestProviderHarness } = await import('./testing/fake-providers.js');
 		const testHarness = options.factories?.createTestHarness?.() ?? new TestProviderHarness();
 		await testHarness.registerProviders(usageManager);
 		return { testHarness };
