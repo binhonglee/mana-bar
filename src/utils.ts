@@ -47,6 +47,10 @@ export function formatTimeUntilReset(resetTime: Date): string {
 	const now = new Date();
 	const diff = resetTime.getTime() - now.getTime();
 
+	if (diff <= -60000) {
+		return '--';
+	}
+
 	if (diff <= 0) {
 		return 'Just now';
 	}

@@ -247,11 +247,23 @@ export class GeminiProvider extends UsageProvider {
 		}
 
 		const used = Math.max(0, Math.min(100, Math.round((1 - bucket.remainingFraction) * 100)));
+		let resetTime: Date | undefined;
+		if (bucket.resetTime) {
+			const date = new Date(bucket.resetTime);
+			if (date.getTime() > 0) {
+				resetTime = date;
+			}
+		}
+
+		if (resetTime === undefined) {
+			return null;
+		}
+
 		return {
 			modelName: bucket.modelId,
 			used,
 			limit: 100,
-			resetTime: bucket.resetTime ? new Date(bucket.resetTime) : undefined,
+			resetTime,
 		};
 	}
 

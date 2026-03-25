@@ -20,7 +20,13 @@ describe('formatTimeUntilReset', () => {
 		expect(formatTimeUntilReset(new Date('2026-03-10T12:45:00.000Z'))).toBe('45m');
 	});
 
-	it('shows just now for past reset times', () => {
+	it('shows just now for recently past reset times', () => {
 		expect(formatTimeUntilReset(new Date('2026-03-10T11:59:59.000Z'))).toBe('Just now');
+		expect(formatTimeUntilReset(new Date('2026-03-10T11:59:01.000Z'))).toBe('Just now');
+	});
+
+	it('shows -- for reset times far in the past', () => {
+		expect(formatTimeUntilReset(new Date('2026-03-10T11:58:00.000Z'))).toBe('--');
+		expect(formatTimeUntilReset(new Date('1970-01-01T00:00:00.000Z'))).toBe('--');
 	});
 });
