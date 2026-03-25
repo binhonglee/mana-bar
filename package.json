@@ -35,6 +35,11 @@
         "command": "manaBar.openDashboard",
         "title": "Open Dashboard",
         "category": "mana.bar"
+      },
+      {
+        "command": "manaBar.reportOutage",
+        "title": "Report AI Service Outage",
+        "category": "mana.bar"
       }
     ],
     "viewsContainers": {

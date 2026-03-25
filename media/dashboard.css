@@ -262,7 +262,7 @@ body {
 	}
 }
 
-/* ============ Card Header ============ */
+/* ============ Card Header & Menu ============ */
 
 .card-header {
 	width: 100%;
@@ -283,16 +283,13 @@ body {
 	white-space: nowrap;
 	flex: 1;
 	min-width: 0;
-	pointer-events: none;
-	transition: padding-right var(--transition-fast);
 }
 
-.service-card:hover .service-name,
-.hidden-section .service-name {
-	padding-right: 28px;
+.card-menu-container {
+	position: relative;
 }
 
-.card-hide-btn {
+.card-menu-btn {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -303,23 +300,82 @@ body {
 	background: transparent;
 	color: var(--text-secondary);
 	cursor: pointer;
+	font-size: 16px;
+	line-height: 1;
 	opacity: 0;
 	transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
-	position: absolute;
-	top: 50%;
-	right: 0;
-	transform: translateY(-50%);
 }
 
-.service-card:hover .card-hide-btn {
+.service-card:hover .card-menu-btn,
+.card-menu-btn[aria-expanded="true"] {
 	opacity: 0.6;
 	pointer-events: auto;
 }
 
-.card-hide-btn:hover {
+.card-menu-btn:hover,
+.card-menu-btn[aria-expanded="true"] {
 	opacity: 1 !important;
 	color: var(--text-primary);
 	background: var(--hover-bg);
+}
+
+.card-dropdown-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	background: var(--card-bg);
+	border: 1px solid var(--vscode-widget-border);
+	border-radius: 8px;
+	box-shadow: 0 4px 12px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.15));
+	min-width: 180px;
+	z-index: 100;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(-4px);
+	transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+	padding: 4px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.card-dropdown-menu.show {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+}
+
+.menu-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 12px;
+	border: none;
+	background: transparent;
+	color: var(--text-primary);
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+	border-radius: 6px;
+	font-family: inherit;
+	transition: background var(--transition-fast);
+}
+
+.menu-item:hover {
+	background: var(--hover-bg);
+}
+
+.menu-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	color: var(--text-secondary);
+}
+
+.menu-item:hover .menu-icon {
+	color: var(--text-primary);
 }
 
 /* ============ Progress Ring ============ */
@@ -486,6 +542,51 @@ body {
 .quota-window-meta,
 .quota-window-reset {
 	color: var(--text-secondary);
+}
+
+/* ============ Outage Indicator ============ */
+
+.card-outage-indicator {
+	width: 100%;
+	padding: 8px 12px;
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	margin-bottom: 4px;
+	transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.card-outage-indicator:hover {
+	transform: translateY(-1px);
+}
+
+.card-outage-indicator:active {
+	transform: translateY(0);
+}
+
+.card-outage-indicator.verified {
+	background: var(--status-critical-bg);
+	color: var(--status-critical);
+	border: 1px solid color-mix(in srgb, var(--status-critical) 30%, transparent);
+}
+
+.card-outage-indicator.verified:hover {
+	background: color-mix(in srgb, var(--status-critical) 20%, transparent);
+}
+
+.card-outage-indicator.unverified {
+	background: var(--status-warning-bg);
+	color: var(--status-warning);
+	border: 1px solid color-mix(in srgb, var(--status-warning) 30%, transparent);
+}
+
+.card-outage-indicator.unverified:hover {
+	background: color-mix(in srgb, var(--status-warning) 20%, transparent);
 }
 
 /* ============ Card Details ============ */
@@ -658,6 +759,147 @@ body {
 
 .btn-primary:active {
 	transform: translateY(0);
+}
+
+/* ============ Status Tab ============ */
+
+.status-container {
+	max-width: 800px;
+	margin: 0 auto;
+}
+
+.status-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 24px;
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--vscode-widget-border);
+}
+
+.status-header h2 {
+	font-size: 20px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.outages-list {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.outage-item {
+	background: var(--card-bg);
+	border: 1px solid var(--vscode-widget-border);
+	border-radius: 12px;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	transition: box-shadow var(--transition-fast);
+}
+
+.outage-item:hover {
+	box-shadow: 0 4px 12px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.1));
+	border-color: var(--vscode-focusBorder);
+}
+
+.outage-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.outage-title {
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--text-primary);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.outage-separator {
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+	background: var(--text-secondary);
+	opacity: 0.5;
+}
+
+.outage-model {
+	color: var(--text-secondary);
+	font-weight: 500;
+}
+
+.outage-model.service-wide {
+	font-style: italic;
+	font-weight: 400;
+}
+
+.status-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.status-badge.verified {
+	background: var(--status-critical-bg);
+	color: var(--status-critical);
+	border: 1px solid color-mix(in srgb, var(--status-critical) 30%, transparent);
+}
+
+.status-badge.unverified {
+	background: var(--status-warning-bg);
+	color: var(--status-warning);
+	border: 1px solid color-mix(in srgb, var(--status-warning) 30%, transparent);
+}
+
+.outage-meta {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	font-size: 13px;
+	color: var(--text-secondary);
+}
+
+.outage-reports {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	background: var(--hover-bg);
+	padding: 2px 8px;
+	border-radius: 12px;
+}
+
+.reports-icon {
+	font-size: 12px;
+}
+
+.outage-view-btn {
+	margin-left: auto;
+	padding: 6px 16px;
+	border: 1px solid var(--vscode-widget-border);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all var(--transition-fast);
+}
+
+.outage-view-btn:hover {
+	background: var(--hover-bg);
+	border-color: var(--text-primary);
 }
 
 /* ============ Settings ============ */

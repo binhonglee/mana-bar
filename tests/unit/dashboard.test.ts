@@ -38,6 +38,20 @@ function createConfigManager() {
 	};
 }
 
+function createOutageClient() {
+	return {
+		getOutageStatus: vi.fn(async () => ({ reports: [], lastFetched: new Date() })),
+		refresh: vi.fn(async () => ({ reports: [], lastFetched: new Date() })),
+		getCachedData: vi.fn(() => ({ reports: [], lastFetched: new Date() }))
+	};
+}
+
+function createOutageReporter() {
+	return {
+		reportOutage: vi.fn(async () => undefined)
+	};
+}
+
 const USAGE_DATA: UsageData[] = [{
 	serviceId: 'codex',
 	serviceName: 'Codex',
@@ -59,16 +73,18 @@ describe('DashboardPanel', () => {
 	it('creates a singleton webview panel, generates HTML, and reuses the existing panel', () => {
 		const usageManager = createUsageManager(USAGE_DATA);
 		const configManager = createConfigManager();
+		const outageClient = createOutageClient();
+		const outageReporter = createOutageReporter();
 		const extensionUri = vscode.Uri.file('/extension-root');
 
-		DashboardPanel.createOrShow(extensionUri, usageManager as any, configManager as any);
+		DashboardPanel.createOrShow(extensionUri, usageManager as any, configManager as any, outageClient as any, outageReporter as any);
 		let [panel] = (vscode as any).__testing.getCreatedWebviewPanels();
 
 		expect(panel.webview.html).toContain("style-src vscode-test-csp 'unsafe-inline'");
 		expect(panel.webview.html).toContain('webview:/extension-root/media/dashboard.css');
 		expect(panel.webview.html).toContain('webview:/extension-root/media/dashboard.js');
 
-		DashboardPanel.createOrShow(extensionUri, usageManager as any, configManager as any);
+		DashboardPanel.createOrShow(extensionUri, usageManager as any, configManager as any, outageClient as any, outageReporter as any);
 		[panel] = (vscode as any).__testing.getCreatedWebviewPanels();
 
 		expect((vscode as any).__testing.getCreatedWebviewPanels()).toHaveLength(1);
@@ -79,8 +95,10 @@ describe('DashboardPanel', () => {
 	it('sends updates on ready and routes incoming webview messages', async () => {
 		const usageManager = createUsageManager(USAGE_DATA);
 		const configManager = createConfigManager();
+		const outageClient = createOutageClient();
+		const outageReporter = createOutageReporter();
 
-		DashboardPanel.createOrShow(vscode.Uri.file('/extension-root'), usageManager as any, configManager as any);
+		DashboardPanel.createOrShow(vscode.Uri.file('/extension-root'), usageManager as any, configManager as any, outageClient as any, outageReporter as any);
 		const [panel] = (vscode as any).__testing.getCreatedWebviewPanels();
 
 		(vscode as any).__testing.dispatchWebviewMessage(panel, { type: 'ready' });
@@ -108,7 +126,9 @@ describe('DashboardPanel', () => {
 	it('revives serialized panels and clears singleton state on dispose', async () => {
 		const usageManager = createUsageManager(USAGE_DATA);
 		const configManager = createConfigManager();
-		const serializer = new DashboardSerializer(vscode.Uri.file('/extension-root'), usageManager as any, configManager as any);
+		const outageClient = createOutageClient();
+		const outageReporter = createOutageReporter();
+		const serializer = new DashboardSerializer(vscode.Uri.file('/extension-root'), usageManager as any, configManager as any, outageClient as any, outageReporter as any);
 		const panel = vscode.window.createWebviewPanel('manaBar.dashboard', 'Dashboard', vscode.ViewColumn.One, {
 			enableScripts: true,
 		}) as any;

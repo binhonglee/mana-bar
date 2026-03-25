@@ -3,6 +3,7 @@ import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
 import { StatusBarTooltipLayout, UsageData } from '../types';
 import { buildUsageBlock, toServiceViewModel } from '../usage-display';
+import { OutageClient } from '../outage/outage-client';
 
 /**
  * Manages the status bar item for displaying usage summary
@@ -11,7 +12,11 @@ export class StatusBarController {
 	private statusBarItem: vscode.StatusBarItem;
 	private readonly disposables: vscode.Disposable[] = [];
 
-	constructor(private usageManager: UsageManager, private configManager?: ConfigManager) {
+	constructor(
+		private usageManager: UsageManager,
+		private configManager?: ConfigManager,
+		private outageClient?: OutageClient
+	) {
 		this.statusBarItem = vscode.window.createStatusBarItem(
 			vscode.StatusBarAlignment.Right,
 			100
@@ -23,6 +28,9 @@ export class StatusBarController {
 		this.usageManager.onDidUpdateUsage(() => this.update());
 		if (this.configManager) {
 			this.disposables.push(this.configManager.onConfigChange(() => this.update()));
+		}
+		if (this.outageClient) {
+			this.outageClient.getOutageStatus().then(() => this.update());
 		}
 
 		// Initial update
@@ -58,9 +66,23 @@ export class StatusBarController {
 			}
 			parts.push(`${viewModel.statusEmoji} ${viewModel.shortLabel}: ${viewModel.summaryText}`);
 		}
+		
+		// Check for outages across all tracked services
+		const outages = this.outageClient?.getCachedData()?.reports;
+		let outageCount = 0;
+		if (outages && allUsage.length > 0) {
+			const trackedServiceNames = new Set(allUsage.map(u => u.serviceName.toLowerCase()));
+			outageCount = outages.filter(o => trackedServiceNames.has(o.service.toLowerCase())).length;
+		}
 
-		this.statusBarItem.text = `${parts.join(' • ')}`;
-		this.statusBarItem.backgroundColor = undefined;
+		const baseText = parts.join(' • ');
+		this.statusBarItem.text = outageCount > 0 
+			? `⚠️ ${outageCount} outage${outageCount === 1 ? '' : 's'} | ${baseText}` 
+			: baseText;
+		
+		this.statusBarItem.backgroundColor = outageCount > 0 
+			? new vscode.ThemeColor('statusBarItem.warningBackground') 
+			: undefined;
 
 		const tooltipLayout = this.configManager?.getStatusBarTooltipLayout() ?? 'regular';
 		this.statusBarItem.tooltip = new vscode.MarkdownString(

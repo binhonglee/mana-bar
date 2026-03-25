@@ -7,6 +7,8 @@ import { DashboardPanel, DashboardSerializer } from './ui/dashboard';
 import { registerUsageProviders } from './provider-registration';
 import { serializeUsageData } from './dashboard-serialization';
 import { debugLog, setDebugLoggingEnabled } from './logger';
+import { OutageClient } from './outage/outage-client';
+import { OutageReporter } from './outage/outage-reporter';
 
 let usageManager: UsageManager | undefined;
 const TEST_MODE_ENV = 'MANA_BAR_TEST_MODE';
@@ -20,14 +22,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Initialize managers
 	usageManager = new UsageManager(configManager);
+	const outageClient = new OutageClient();
+	const outageReporter = new OutageReporter(outageClient);
 
 	const providerRegistration = await registerUsageProviders(usageManager, context, {
 		testMode: isTestMode,
 	});
 
 	// Initialize UI components
-	const statusBar = new StatusBarController(usageManager, configManager);
-	const sidebarProvider = new SidebarProvider(usageManager, configManager);
+	const statusBar = new StatusBarController(usageManager, configManager, outageClient);
+	const sidebarProvider = new SidebarProvider(usageManager, configManager, outageClient);
 
 	// Register sidebar tree view
 	const treeView = vscode.window.createTreeView('manaBarSidebar', {
@@ -39,15 +43,20 @@ export async function activate(context: vscode.ExtensionContext) {
 		providerRegistration.testHarness?.advanceScenario();
 		vscode.window.showInformationMessage('Refreshing usage data...');
 		await usageManager?.refreshAll();
+		await outageClient.refresh();
 		vscode.window.showInformationMessage('Usage data refreshed');
 	});
 
 	const settingsCommand = vscode.commands.registerCommand('manaBar.openSettings', () => {
-		DashboardPanel.createOrShow(context.extensionUri, usageManager!, configManager);
+		DashboardPanel.createOrShow(context.extensionUri, usageManager!, configManager, outageClient, outageReporter);
 	});
 
 	const dashboardCommand = vscode.commands.registerCommand('manaBar.openDashboard', () => {
-		DashboardPanel.createOrShow(context.extensionUri, usageManager!, configManager);
+		DashboardPanel.createOrShow(context.extensionUri, usageManager!, configManager, outageClient, outageReporter);
+	});
+
+	const reportOutageCommand = vscode.commands.registerCommand('manaBar.reportOutage', () => {
+		void outageReporter.reportOutage();
 	});
 
 	const testSnapshotCommand = isTestMode
@@ -62,14 +71,20 @@ export async function activate(context: vscode.ExtensionContext) {
 		}))
 		: undefined;
 
-	// Start polling
+	// Start polling usage
 	usageManager.startPolling();
+
+	// Background poll for outages every 5 minutes (updates cache for sidebar/statusbar)
+	outageClient.getOutageStatus().catch(console.error);
+	const outagePoller = setInterval(() => {
+		outageClient.getOutageStatus().catch(console.error);
+	}, 5 * 60 * 1000);
 
 	// Add to subscriptions
 	// Register webview serializer for panel restoration
 	const serializer = vscode.window.registerWebviewPanelSerializer(
 		'manaBar.dashboard',
-		new DashboardSerializer(context.extensionUri, usageManager, configManager)
+		new DashboardSerializer(context.extensionUri, usageManager, configManager, outageClient, outageReporter)
 	);
 
 	context.subscriptions.push(
@@ -79,6 +94,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		refreshCommand,
 		settingsCommand,
 		dashboardCommand,
+		reportOutageCommand,
 		...(testSnapshotCommand ? [testSnapshotCommand] : []),
 		serializer,
 		usageManager,
@@ -87,7 +103,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			// Restart polling when config changes
 			usageManager?.stopPolling();
 			usageManager?.startPolling();
-		})
+		}),
+		{ dispose: () => clearInterval(outagePoller) }
 	);
 
 	debugLog('mana.bar initialized successfully');

@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import { buildDashboardConfigPayload, HostToWebviewMessage, serializeUsageData, WebviewToHostMessage } from '../dashboard-serialization';
 import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
+import { OutageClient } from '../outage/outage-client';
+import { OutageReporter } from '../outage/outage-reporter';
+import { serializeOutageReport } from '../outage/outage-types';
 
 function getNonce(): string {
 	let text = '';
@@ -27,7 +30,9 @@ export class DashboardPanel {
 	public static createOrShow(
 		extensionUri: vscode.Uri,
 		usageManager: UsageManager,
-		configManager: ConfigManager
+		configManager: ConfigManager,
+		outageClient: OutageClient,
+		outageReporter: OutageReporter
 	): void {
 		const column = vscode.window.activeTextEditor?.viewColumn;
 
@@ -54,17 +59,19 @@ export class DashboardPanel {
 		panel.iconPath = vscode.Uri.joinPath(extensionUri, 'assets', 'logo.png');
 
 		DashboardPanel.panelCreateCount += 1;
-		DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, usageManager, configManager);
+		DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, usageManager, configManager, outageClient, outageReporter);
 	}
 
 	public static revive(
 		panel: vscode.WebviewPanel,
 		extensionUri: vscode.Uri,
 		usageManager: UsageManager,
-		configManager: ConfigManager
+		configManager: ConfigManager,
+		outageClient: OutageClient,
+		outageReporter: OutageReporter
 	): void {
 		DashboardPanel.panelCreateCount += 1;
-		DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, usageManager, configManager);
+		DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, usageManager, configManager, outageClient, outageReporter);
 	}
 
 	public static getDebugState(): { isOpen: boolean; createCount: number } {
@@ -84,7 +91,9 @@ export class DashboardPanel {
 		panel: vscode.WebviewPanel,
 		extensionUri: vscode.Uri,
 		private readonly _usageManager: UsageManager,
-		private readonly _configManager: ConfigManager
+		private readonly _configManager: ConfigManager,
+		private readonly _outageClient: OutageClient,
+		private readonly _outageReporter: OutageReporter
 	) {
 		this._panel = panel;
 		this._extensionUri = extensionUri;
@@ -106,11 +115,30 @@ export class DashboardPanel {
 		this._disposables.push(
 			this._configManager.onConfigChange(() => this._sendUpdate())
 		);
+
+		// Send outage updates periodically and initially
+		this._sendOutageUpdate();
+		const outageTimer = setInterval(() => this._sendOutageUpdate(), 5 * 60 * 1000); // 5 min
+		this._disposables.push({ dispose: () => clearInterval(outageTimer) });
+	}
+
+	private async _sendOutageUpdate() {
+		try {
+			const status = await this._outageClient.getOutageStatus();
+			const message: HostToWebviewMessage = {
+				type: 'outageUpdate',
+				outages: status.reports.map(serializeOutageReport)
+			};
+			void this._panel.webview.postMessage(message);
+		} catch (error) {
+			console.error('[DashboardPanel] Failed to send outage update:', error);
+		}
 	}
 
 	private _sendUpdate(): void {
 		this._sendUsageUpdate();
 		this._sendConfigUpdate();
+		void this._sendOutageUpdate();
 	}
 
 	private _sendUsageUpdate(): void {
@@ -135,9 +163,11 @@ export class DashboardPanel {
 		switch (message.type) {
 			case 'ready':
 				this._sendUpdate();
+				this._sendOutageUpdate();
 				break;
 			case 'refresh':
-				this._usageManager.refreshAll().catch(console.error);
+				this._usageManager.refreshAll();
+				this._outageClient.refresh().then(() => this._sendOutageUpdate());
 				break;
 			case 'toggleService':
 				this._configManager.updateServiceConfig(message.service, {
@@ -162,6 +192,12 @@ export class DashboardPanel {
 				break;
 			case 'toggleHideService':
 				this._configManager.toggleHideService(message.service);
+				break;
+			case 'reportOutage':
+				this._outageReporter.reportOutage(message.serviceId);
+				break;
+			case 'openOutageUrl':
+				void vscode.env.openExternal(vscode.Uri.parse(message.url));
 				break;
 		}
 	}
@@ -193,6 +229,7 @@ export class DashboardPanel {
 		</div>
 		<nav class="tab-bar">
 			<button class="tab active" data-tab="dashboard">Dashboard</button>
+			<button class="tab" data-tab="status">Status</button>
 			<button class="tab" data-tab="settings">Settings</button>
 		</nav>
 		<div class="header-right">
@@ -221,6 +258,27 @@ export class DashboardPanel {
 			<h2>No Services Active</h2>
 			<p>Enable LLM services in the Settings tab to start tracking usage.</p>
 			<button id="go-settings-btn" class="btn-primary">Go to Settings</button>
+		</div>
+	</main>
+
+	<main id="status-tab" class="tab-content">
+		<div class="status-container">
+			<div class="status-header">
+				<h2>Active Outages</h2>
+				<button id="report-outage-btn" class="btn-primary">Report Outage</button>
+			</div>
+			<div id="outages-list" class="outages-list">
+				<!-- Outages will be rendered here -->
+			</div>
+			<div id="outages-empty-state" class="empty-state hidden">
+				<div class="empty-icon">
+					<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+					</svg>
+				</div>
+				<h2>All Systems Operational</h2>
+				<p>No active outages reported for tracked services.</p>
+			</div>
 		</div>
 	</main>
 
@@ -322,7 +380,9 @@ export class DashboardSerializer implements vscode.WebviewPanelSerializer {
 	constructor(
 		private readonly extensionUri: vscode.Uri,
 		private readonly usageManager: UsageManager,
-		private readonly configManager: ConfigManager
+		private readonly configManager: ConfigManager,
+		private readonly outageClient: OutageClient,
+		private readonly outageReporter: OutageReporter
 	) { }
 
 	async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: any): Promise<void> {
@@ -333,6 +393,6 @@ export class DashboardSerializer implements vscode.WebviewPanelSerializer {
 				vscode.Uri.joinPath(this.extensionUri, 'assets'),
 			],
 		};
-		DashboardPanel.revive(panel, this.extensionUri, this.usageManager, this.configManager);
+		DashboardPanel.revive(panel, this.extensionUri, this.usageManager, this.configManager, this.outageClient, this.outageReporter);
 	}
 }

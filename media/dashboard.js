@@ -2,7 +2,7 @@
 var DashboardApp;
 (function (DashboardApp) {
     const vscode = acquireVsCodeApi();
-    const state = { usageData: [], config: null, activeTab: 'dashboard', expandedCards: {} };
+    const state = { usageData: [], outages: [], config: null, activeTab: 'dashboard', expandedCards: {} };
     Object.assign(state, vscode.getState() || {});
     const RING_SIZE = 140;
     const RING_CENTER = 70;
@@ -53,6 +53,18 @@ var DashboardApp;
         if (hours > 0)
             return `${hours}h ${minutes}m`;
         return `${minutes}m`;
+    }
+    function formatTimeAgo(isoString) {
+        const diff = Date.now() - new Date(isoString).getTime();
+        const hours = Math.floor(diff / 3600000);
+        const minutes = Math.floor((diff % 3600000) / 60000);
+        if (hours > 24)
+            return `${Math.floor(hours / 24)}d ago`;
+        if (hours > 0)
+            return `${hours}h ${minutes}m ago`;
+        if (minutes > 0)
+            return `${minutes}m ago`;
+        return 'just now';
     }
     function formatResetDisplay(resetTime, resetText, prefix = '') {
         const value = resetTime ? formatTimeUntilReset(resetTime) : (resetText || '--');
@@ -125,6 +137,24 @@ var DashboardApp;
     function renderModelRows(models) {
         return !models?.length ? '' : models.map((model) => `<div class="model-row" title="${escapeHtml(model.modelName)}" aria-label="${escapeHtml(model.modelName)}">${escapeHtml(model.modelName)}</div>`).join('');
     }
+    function getServiceOutages(serviceId) {
+        return state.outages.filter(o => o.service.toLowerCase() === serviceId.toLowerCase());
+    }
+    function renderOutageIndicator(serviceId) {
+        const outages = getServiceOutages(serviceId);
+        if (outages.length === 0)
+            return '';
+        const hasVerified = outages.some(o => o.verified);
+        const badgeClass = hasVerified ? 'verified' : 'unverified';
+        const icon = hasVerified ? '✅' : '⚠️';
+        const countText = outages.length === 1 ? '1 outage' : `${outages.length} outages`;
+        return `
+			<div class="card-outage-indicator ${badgeClass}" data-service="${escapeHtml(serviceId)}" data-count="${outages.length}" data-url="${outages.length === 1 ? escapeHtml(outages[0].issueUrl) : ''}" title="${outages.length === 1 ? 'View issue on GitHub' : 'View all outages in Status tab'}">
+				<span class="indicator-icon">${icon}</span>
+				<span class="indicator-text">${countText} reported</span>
+			</div>
+		`;
+    }
     function createServiceCard(data, index) {
         const card = document.createElement('div');
         const hasModels = Boolean(data.models && data.models.length > 1);
@@ -132,13 +162,27 @@ var DashboardApp;
         card.dataset.service = data.serviceName;
         card.dataset.layout = getCardLayoutKey(data);
         card.style.animationDelay = `${index * 0.05}s`;
+        const isHidden = isServiceHidden(data.serviceName);
         card.innerHTML = `
 			<div class="card-header" title="${escapeHtml(data.serviceName)}">
 				<span class="service-name" aria-label="${escapeHtml(data.serviceName)}">${escapeHtml(data.serviceName)}</span>
-				<button class="card-hide-btn" title="${isServiceHidden(data.serviceName) ? 'Show' : 'Hide'}" data-service="${escapeHtml(data.serviceName)}">${isServiceHidden(data.serviceName) ? eyeOffIcon() : eyeIcon()}</button>
+				<div class="card-menu-container">
+					<button class="card-menu-btn" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">⋮</button>
+					<div class="card-dropdown-menu">
+						<button class="menu-item hide-btn card-hide-btn" data-service="${escapeHtml(data.serviceName)}">
+							<span class="menu-icon">${isHidden ? eyeIcon() : eyeOffIcon()}</span>
+							${isHidden ? 'Show on dashboard' : 'Hide from dashboard'}
+						</button>
+						<button class="menu-item report-btn" data-service="${escapeHtml(data.serviceId)}">
+							<span class="menu-icon">⚠️</span>
+							Report Outage
+						</button>
+					</div>
+				</div>
 			</div>
 			<div class="card-body">
 				${renderMetricSection(data)}
+				${renderOutageIndicator(data.serviceName)}
 				${hasQuotaWindows(data) ? '' : `<div class="card-details"><div class="detail-row"><span class="detail-label">Resets in</span><span class="detail-value reset-time" data-reset-time="${data.resetTime || ''}" data-reset-prefix="" data-reset-text="${data.resetText || ''}">${formatResetDisplay(data.resetTime, data.resetText)}</span></div></div>`}
 			</div>
 			${hasModels ? `<div class="card-models ${state.expandedCards[data.serviceName] ? 'expanded' : ''}">${renderModelRows(data.models)}</div><button class="card-expand-btn ${state.expandedCards[data.serviceName] ? 'expanded' : ''}" data-service="${escapeHtml(data.serviceName)}"><span class="chevron">&#9660;</span><span class="expand-label">${state.expandedCards[data.serviceName] ? 'Hide' : 'Show'} ${data.models.length} model${data.models.length !== 1 ? 's' : ''}</span></button>` : ''}
@@ -166,9 +210,44 @@ var DashboardApp;
                 persistState();
             });
         }
-        card.querySelector('.card-hide-btn')?.addEventListener('click', () => {
+        // Dropdown menu logic
+        const menuBtn = card.querySelector('.card-menu-btn');
+        const dropdown = card.querySelector('.card-dropdown-menu');
+        if (menuBtn && dropdown) {
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isExpanded = menuBtn.getAttribute('aria-expanded') === 'true';
+                // Close all other menus first
+                document.querySelectorAll('.card-menu-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+                document.querySelectorAll('.card-dropdown-menu').forEach(menu => menu.classList.remove('show'));
+                if (!isExpanded) {
+                    menuBtn.setAttribute('aria-expanded', 'true');
+                    dropdown.classList.add('show');
+                }
+            });
+        }
+        card.querySelector('.menu-item.hide-btn')?.addEventListener('click', () => {
             vscode.postMessage({ type: 'toggleHideService', service: data.serviceName });
+            dropdown?.classList.remove('show');
+            menuBtn?.setAttribute('aria-expanded', 'false');
         });
+        card.querySelector('.menu-item.report-btn')?.addEventListener('click', () => {
+            vscode.postMessage({ type: 'reportOutage', serviceId: data.serviceId });
+            dropdown?.classList.remove('show');
+            menuBtn?.setAttribute('aria-expanded', 'false');
+        });
+        const indicator = card.querySelector('.card-outage-indicator');
+        if (indicator) {
+            indicator.addEventListener('click', () => {
+                const count = parseInt(indicator.dataset.count || '0', 10);
+                if (count === 1 && indicator.dataset.url) {
+                    vscode.postMessage({ type: 'openOutageUrl', url: indicator.dataset.url });
+                }
+                else if (count > 1) {
+                    switchTab('status');
+                }
+            });
+        }
         return card;
     }
     function updateServiceCard(data) {
@@ -201,6 +280,49 @@ var DashboardApp;
             reset.dataset.resetTime = data.resetTime || '';
             reset.dataset.resetText = data.resetText || '';
             reset.textContent = formatResetDisplay(data.resetTime, data.resetText, reset.dataset.resetPrefix || '');
+        }
+        // Update outage indicator
+        let indicatorContainer = card.querySelector('.card-outage-indicator');
+        const indicatorHtml = renderOutageIndicator(data.serviceName);
+        if (indicatorContainer && !indicatorHtml) {
+            // Remove existing
+            indicatorContainer.remove();
+        }
+        else if (!indicatorContainer && indicatorHtml) {
+            // Add new (insert after metric section)
+            const metricSection = card.querySelector('.progress-ring-container, .quota-windows');
+            if (metricSection) {
+                metricSection.insertAdjacentHTML('afterend', indicatorHtml);
+                // Wire up event listener for the new element
+                indicatorContainer = card.querySelector('.card-outage-indicator');
+                if (indicatorContainer) {
+                    indicatorContainer.addEventListener('click', () => {
+                        const count = parseInt(indicatorContainer.dataset.count || '0', 10);
+                        if (count === 1 && indicatorContainer.dataset.url) {
+                            vscode.postMessage({ type: 'openOutageUrl', url: indicatorContainer.dataset.url });
+                        }
+                        else if (count > 1) {
+                            switchTab('status');
+                        }
+                    });
+                }
+            }
+        }
+        else if (indicatorContainer && indicatorHtml) {
+            // Update existing (easy way: replace HTML and re-wire)
+            indicatorContainer.outerHTML = indicatorHtml;
+            const newIndicator = card.querySelector('.card-outage-indicator');
+            if (newIndicator) {
+                newIndicator.addEventListener('click', () => {
+                    const count = parseInt(newIndicator.dataset.count || '0', 10);
+                    if (count === 1 && newIndicator.dataset.url) {
+                        vscode.postMessage({ type: 'openOutageUrl', url: newIndicator.dataset.url });
+                    }
+                    else if (count > 1) {
+                        switchTab('status');
+                    }
+                });
+            }
         }
         const models = card.querySelector('.card-models');
         if (models && data.models)
@@ -288,23 +410,92 @@ var DashboardApp;
         if (debugLogs instanceof HTMLInputElement)
             debugLogs.checked = Boolean(state.config.debugLogs);
     }
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+        const targetTab = document.querySelector(`.tab[data-tab="${tabId}"]`);
+        if (targetTab)
+            targetTab.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach((tc) => tc.classList.remove('active'));
+        const targetContent = document.getElementById(`${tabId}-tab`);
+        if (targetContent)
+            targetContent.classList.add('active');
+        state.activeTab = tabId;
+        persistState();
+        if (tabId === 'dashboard')
+            renderDashboard();
+        if (tabId === 'settings')
+            renderSettings();
+        if (tabId === 'status')
+            renderStatus();
+    }
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!target.closest('.card-menu-container')) {
+            document.querySelectorAll('.card-menu-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+            document.querySelectorAll('.card-dropdown-menu').forEach(menu => menu.classList.remove('show'));
+        }
+    });
     function setupTabSwitching() {
-        document.querySelectorAll('.tab').forEach((button) => {
-            button.addEventListener('click', () => {
-                const tab = button.dataset.tab;
-                if (!tab)
-                    return;
-                document.querySelectorAll('.tab').forEach((element) => element.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach((element) => element.classList.remove('active'));
-                button.classList.add('active');
-                document.getElementById(`${tab}-tab`)?.classList.add('active');
-                state.activeTab = tab;
-                persistState();
+        document.querySelectorAll('.tab').forEach((tab) => {
+            tab.addEventListener('click', () => {
+                const target = tab.dataset.tab;
+                if (target)
+                    switchTab(target);
             });
         });
-        if (state.activeTab && state.activeTab !== 'dashboard') {
-            document.querySelector(`.tab[data-tab="${state.activeTab}"]`)?.click();
+    }
+    function renderStatus() {
+        const container = document.getElementById('outages-list');
+        const emptyState = document.getElementById('outages-empty-state');
+        if (!(container instanceof HTMLElement) || !(emptyState instanceof HTMLElement))
+            return;
+        if (state.outages.length === 0) {
+            container.innerHTML = '';
+            emptyState.classList.remove('hidden');
+            return;
         }
+        emptyState.classList.add('hidden');
+        // Map outages to HTML
+        container.innerHTML = state.outages.map(outage => {
+            const badgeHtml = outage.verified
+                ? '<span class="status-badge verified" title="Verified by maintainer"><span class="badge-icon">✅</span> Confirmed</span>'
+                : '<span class="status-badge unverified" title="Community report (unverified)"><span class="badge-icon">⚠️</span> Unverified</span>';
+            const modelHtml = outage.model ? `<span class="outage-model">${escapeHtml(outage.model)}</span>` : '<span class="outage-model service-wide">Service-wide</span>';
+            return `
+				<div class="outage-item">
+					<div class="outage-header">
+						<div class="outage-title">
+							<span class="outage-service">${escapeHtml(outage.service)}</span>
+							<span class="outage-separator"></span>
+							${modelHtml}
+						</div>
+						${badgeHtml}
+					</div>
+					<div class="outage-meta">
+						<span class="outage-time" title="${new Date(outage.createdAt).toLocaleString()}">Reported ${formatTimeAgo(outage.createdAt)}</span>
+						<span class="outage-reports" title="${outage.reactionCount} user(s) clicked 👍 on this issue">
+							<span class="reports-icon">👍</span> ${outage.reactionCount}
+						</span>
+						<button class="outage-view-btn" data-url="${escapeHtml(outage.issueUrl)}">View on GitHub</button>
+					</div>
+				</div>
+			`;
+        }).join('');
+        // Add event listeners for "View on GitHub" buttons
+        container.querySelectorAll('.outage-view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const url = btn.dataset.url;
+                if (url) {
+                    vscode.postMessage({ type: 'openOutageUrl', url });
+                }
+            });
+        });
+    }
+    function renderPersistedState() {
+        renderDashboard();
+        renderSettings();
+        renderStatus();
     }
     function init() {
         setupTabSwitching();
@@ -319,6 +510,12 @@ var DashboardApp;
         document.getElementById('go-settings-btn')?.addEventListener('click', () => {
             document.querySelector('.tab[data-tab="settings"]')?.click();
         });
+        const reportOutageBtn = document.getElementById('report-outage-btn');
+        if (reportOutageBtn) {
+            reportOutageBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'reportOutage' });
+            });
+        }
         const slider = document.getElementById('polling-slider');
         const value = document.getElementById('polling-value');
         if (slider instanceof HTMLInputElement && value instanceof HTMLElement) {
@@ -346,19 +543,27 @@ var DashboardApp;
         bindSelect('debug-logs-toggle', (element) => {
             element.addEventListener('change', () => vscode.postMessage({ type: 'setDebugLogs', enabled: element.checked }));
         });
-        if (state.usageData.length > 0)
-            renderDashboard();
-        if (state.config)
-            renderSettings();
+        // Restore any persisted DOM state before activating a tab so reloads keep cards/settings populated.
+        renderPersistedState();
+        // Initial render based on active tab
+        switchTab(state.activeTab || 'dashboard');
         window.addEventListener('message', (event) => {
-            if (event.data.type === 'usageUpdate') {
-                state.usageData = event.data.data;
-                renderDashboard();
-            }
-            else {
-                state.config = event.data.config;
-                renderDashboard();
-                renderSettings();
+            const message = event.data;
+            switch (message.type) {
+                case 'usageUpdate':
+                    state.usageData = message.data || [];
+                    renderDashboard();
+                    break;
+                case 'configUpdate':
+                    state.config = message.config;
+                    renderSettings();
+                    renderDashboard();
+                    break;
+                case 'outageUpdate':
+                    state.outages = message.outages || [];
+                    renderStatus();
+                    renderDashboard();
+                    break;
             }
             persistState();
         });

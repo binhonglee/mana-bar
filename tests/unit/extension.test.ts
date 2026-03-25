@@ -53,6 +53,7 @@ describe('extension activation', () => {
 			'manaBar.refresh',
 			'manaBar.openSettings',
 			'manaBar.openDashboard',
+			'manaBar.reportOutage',
 			'manaBar.__test.getSnapshot',
 		]);
 		expect(snapshot.providerNames).toEqual([

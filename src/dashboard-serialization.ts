@@ -2,6 +2,7 @@ import { ConfigManager } from './managers/config-manager';
 import { ServiceDescriptor, getServiceDescriptors } from './services';
 import { ServiceId, ServicesConfig, StatusBarTooltipLayout, UsageData, UsageDisplayMode, UsageStatus } from './types';
 import { toServiceViewModel, toUsageMetricViewModel } from './usage-display';
+import { SerializedOutageReport } from './outage/outage-types';
 
 export interface DashboardServiceDescriptor {
 	id: ServiceId;
@@ -55,7 +56,8 @@ export interface DashboardConfigPayload {
 
 export type HostToWebviewMessage =
 	| { type: 'usageUpdate'; data: SerializedUsageData[]; timestamp: string }
-	| { type: 'configUpdate'; config: DashboardConfigPayload };
+	| { type: 'configUpdate'; config: DashboardConfigPayload }
+	| { type: 'outageUpdate'; outages: SerializedOutageReport[] };
 
 export type WebviewToHostMessage =
 	| { type: 'ready' }
@@ -65,7 +67,9 @@ export type WebviewToHostMessage =
 	| { type: 'setDisplayMode'; mode: UsageDisplayMode }
 	| { type: 'setStatusBarTooltipLayout'; layout: StatusBarTooltipLayout }
 	| { type: 'setDebugLogs'; enabled: boolean }
-	| { type: 'toggleHideService'; service: string };
+	| { type: 'toggleHideService'; service: string }
+	| { type: 'reportOutage'; serviceId?: ServiceId }
+	| { type: 'openOutageUrl'; url: string };
 
 function serializeMetric(metric: ReturnType<typeof toUsageMetricViewModel>): SerializedUsageMetric {
 	return {

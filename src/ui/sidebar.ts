@@ -3,6 +3,7 @@ import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
 import { UsageStatus } from '../types';
 import { toServiceViewModel } from '../usage-display';
+import { OutageClient } from '../outage/outage-client';
 
 /**
  * Tree item for the sidebar
@@ -29,11 +30,18 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 	private readonly disposables: vscode.Disposable[] = [];
 
-	constructor(private usageManager: UsageManager, private configManager?: ConfigManager) {
+	constructor(
+		private usageManager: UsageManager,
+		private configManager?: ConfigManager,
+		private outageClient?: OutageClient
+	) {
 		// Subscribe to usage updates
 		this.usageManager.onDidUpdateUsage(() => this.refresh());
 		if (this.configManager) {
 			this.disposables.push(this.configManager.onConfigChange(() => this.refresh()));
+		}
+		if (this.outageClient) {
+			this.outageClient.getOutageStatus().then(() => this.refresh());
 		}
 	}
 
@@ -90,8 +98,18 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 
 		return allUsage.map(usage => {
 			const viewModel = toServiceViewModel(usage, displayMode);
-			const icon = viewModel.status === UsageStatus.CRITICAL ? 'error' :
+			let icon = viewModel.status === UsageStatus.CRITICAL ? 'error' :
 				viewModel.status === UsageStatus.WARNING ? 'warning' : 'pass';
+				
+			// Check for outages
+			if (this.outageClient) {
+				const hasOutage = this.outageClient.getCachedData()?.reports.some(
+					r => r.service.toLowerCase() === usage.serviceName.toLowerCase()
+				);
+				if (hasOutage) {
+					icon = 'alert';
+				}
+			}
 
 			const item = new UsageTreeItem(
 				viewModel.serviceName,
