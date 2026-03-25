@@ -15,6 +15,7 @@ describe('Copilot provider integration', () => {
 			claudeCode: { enabled: false },
 			codex: { enabled: false },
 			vscodeCopilot: { enabled: true },
+			copilotCli: { enabled: false },
 			antigravity: { enabled: false },
 			gemini: { enabled: false },
 		});

@@ -98,7 +98,13 @@ function parseCodexJsonlSuccess(stdout: string): boolean {
 }
 
 // Services we support for outage reporting
-const REPORTABLE_SERVICES: ServiceId[] = ['claudeCode', 'codex'];
+const REPORTABLE_SERVICES: ServiceId[] = ['claudeCode', 'codex', 'copilotCli'];
+
+// Default models for Copilot CLI probing (can be overridden in settings)
+const DEFAULT_COPILOT_CLI_MODELS: Array<{ id: string; label: string }> = [
+	{ id: 'claude-sonnet-4.6', label: 'Claude Sonnet' },
+	{ id: 'gpt-5.2', label: 'GPT-5.2' },
+];
 
 export class OutageReporter {
 	private readonly commandRunner: CommandRunner;
@@ -173,6 +179,9 @@ export class OutageReporter {
 				break;
 			case 'codex':
 				modelResults = await this.probeCodexModels();
+				break;
+			case 'copilotCli':
+				modelResults = await this.probeCopilotCliModels();
 				break;
 			default:
 				modelResults = [];
@@ -305,6 +314,49 @@ export class OutageReporter {
 		}
 
 		return [];
+	}
+
+	private getCopilotCliModelsToProbe(): Array<{ id: string; label: string }> {
+		// Read from VS Code settings, fall back to defaults
+		const config = vscode.workspace.getConfiguration('manaBar');
+		const customModels = config.get<string[]>('copilotCliModels');
+		if (customModels?.length) {
+			return customModels.map(id => ({ id, label: id }));
+		}
+		return DEFAULT_COPILOT_CLI_MODELS;
+	}
+
+	private async probeCopilotCliModels(): Promise<ModelProbeResult[]> {
+		const models = this.getCopilotCliModelsToProbe();
+		const results: ModelProbeResult[] = [];
+
+		for (const model of models) {
+			debugLog(`[OutageReporter] Probing Copilot CLI ${model.label}...`);
+			try {
+				const result = await this.commandRunner.run(
+					'copilot',
+					['-p', 'Reply YES', '--allow-all-tools', '--model', model.id],
+					{ cwd: this.userHomeDir }
+				);
+				// Check for success - non-zero exit code or empty output indicates failure
+				const success = result.exitCode === 0 && result.stdout.trim().length > 0;
+				results.push({
+					modelId: model.id,
+					modelLabel: model.label,
+					success,
+					error: success ? undefined : (result.stderr.trim() || 'No response'),
+				});
+			} catch (error) {
+				results.push({
+					modelId: model.id,
+					modelLabel: model.label,
+					success: false,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+
+		return results;
 	}
 
 	private async showResultsAndReport(probeResults: ServiceProbeResults): Promise<void> {

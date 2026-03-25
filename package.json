@@ -1,7 +1,7 @@
 {
   "name": "mana-bar",
   "displayName": "mana.bar",
-  "description": "Track usage limits across multiple LLM services (Claude Code, Codex, VSCode Copilot, Antigravity, Gemini)",
+  "description": "Track usage limits across multiple LLM services (Claude Code, Codex, VSCode Copilot, Copilot CLI, Antigravity, Gemini)",
   "version": "0.0.2",
   "publisher": "binhonglee",
   "engines": {
@@ -120,6 +120,9 @@
             "vscodeCopilot": {
               "enabled": true
             },
+            "copilotCli": {
+              "enabled": true
+            },
             "antigravity": {
               "enabled": true
             },
@@ -128,6 +131,17 @@
             }
           },
           "description": "Enable or disable usage tracking for each supported service."
+        },
+        "manaBar.copilotCliModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "claude-sonnet-4.6",
+            "gpt-5.2"
+          ],
+          "description": "Copilot CLI models to probe for outage detection"
         }
       }
     }

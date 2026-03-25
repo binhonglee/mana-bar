@@ -42,6 +42,13 @@ export const SERVICE_DESCRIPTORS: Record<ServiceId, ServiceDescriptor> = {
 		defaultEnabled: true,
 		getShortLabel: () => 'Copilot',
 	},
+	copilotCli: {
+		id: 'copilotCli',
+		name: 'Copilot CLI',
+		description: 'GitHub Copilot CLI usage',
+		defaultEnabled: true,
+		getShortLabel: () => 'CopCLI',
+	},
 	antigravity: {
 		id: 'antigravity',
 		name: 'Antigravity',

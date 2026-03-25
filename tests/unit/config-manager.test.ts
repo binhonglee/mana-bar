@@ -18,6 +18,7 @@ describe('ConfigManager', () => {
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
 			vscodeCopilot: { enabled: true },
+			copilotCli: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		});
@@ -40,6 +41,7 @@ describe('ConfigManager', () => {
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
 			vscodeCopilot: { enabled: true },
+			copilotCli: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		});

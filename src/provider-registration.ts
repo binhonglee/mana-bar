@@ -3,6 +3,7 @@ import { UsageManager } from './managers/usage-manager';
 import { ClaudeCodeProvider } from './providers/claude-code';
 import { CodexProvider } from './providers/codex';
 import { CopilotProvider } from './providers/copilot';
+import { CopilotCliProvider } from './providers/copilot-cli';
 import { AntigravityProvider } from './providers/antigravity';
 import { GeminiProvider } from './providers/gemini';
 import type { TestProviderHarness } from './testing/fake-providers';
@@ -22,6 +23,7 @@ export interface ProviderRegistrationFactories {
 	createClaudeCodeProvider?: () => UsageProvider;
 	createCodexProvider?: (context: vscode.ExtensionContext) => UsageProvider;
 	createCopilotProvider?: () => UsageProvider;
+	createCopilotCliProvider?: () => UsageProvider;
 	createAntigravityProvider?: (context: vscode.ExtensionContext) => DiscoverableProvider;
 	createGeminiProvider?: () => DiscoverableProvider;
 	createTestHarness?: () => TestProviderHarness;
@@ -56,6 +58,11 @@ const PROVIDER_REGISTRATIONS: ProviderRegistrationDescriptor[] = [
 		serviceId: 'vscodeCopilot',
 		mode: 'static',
 		create: (_context, factories) => factories?.createCopilotProvider?.() ?? new CopilotProvider(),
+	},
+	{
+		serviceId: 'copilotCli',
+		mode: 'static',
+		create: (_context, factories) => factories?.createCopilotCliProvider?.() ?? new CopilotCliProvider(),
 	},
 	{
 		serviceId: 'antigravity',

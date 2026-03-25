@@ -15,6 +15,7 @@ describe('service registry', () => {
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
 			vscodeCopilot: { enabled: true },
+			copilotCli: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 		});
