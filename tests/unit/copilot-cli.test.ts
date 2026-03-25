@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CopilotCliProvider } from '../../src/providers/copilot-cli';
+import * as vscode from 'vscode';
+import { CopilotCliProvider, SecretStorageLike } from '../../src/providers/copilot-cli';
 import { FixedClock } from '../support/provider-test-utils';
 
 const SUCCESS_RESPONSE = {
@@ -23,71 +24,175 @@ const UNLIMITED_RESPONSE = {
 	},
 };
 
+function createMockSecrets(): SecretStorageLike & { stored: Map<string, string> } {
+	const stored = new Map<string, string>();
+	return {
+		stored,
+		get: vi.fn(async (key: string) => stored.get(key)),
+		store: vi.fn(async (key: string, value: string) => { stored.set(key, value); }),
+		delete: vi.fn(async (key: string) => { stored.delete(key); }),
+	};
+}
+
+function createMockContext(secrets?: SecretStorageLike): vscode.ExtensionContext {
+	return {
+		secrets: secrets ?? createMockSecrets(),
+		subscriptions: [],
+		extensionUri: vscode.Uri.file('/test-extension'),
+	} as unknown as vscode.ExtensionContext;
+}
+
 describe('CopilotCliProvider', () => {
-	it('prefers the macOS keychain token over hosts.json', async () => {
+	it('stores token in SecretStorage after keychain lookup', async () => {
 		const clock = new FixedClock(Date.parse('2026-03-10T10:00:00.000Z'));
 		const fetch = vi.fn(async () => new Response(JSON.stringify(SUCCESS_RESPONSE), { status: 200 }));
-		const provider = new CopilotCliProvider({
+		const exec = vi.fn(async () => ({ stdout: 'keychain-token\n' }));
+		const secrets = createMockSecrets();
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
 			now: clock.now,
 			platform: 'darwin',
 			homeDir: '/Users/test',
 			fileExists: async () => true,
-			exec: async () => ({
-				stdout: 'keychain-token',
-			}),
+			exec,
 			readJsonFile: async (path: string) => {
 				if (path.endsWith('config.json')) {
 					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				if (path.endsWith('hosts.json')) {
-					return {
-						'github.com': { oauth_token: 'file-token' },
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
 					};
 				}
 				return null;
 			},
 			fetch,
+			secrets,
 		});
 
-		const usage = await provider.getUsage();
+		await provider.getUsage();
 
-		expect(usage?.totalUsed).toBe(65);
-		expect(usage?.totalLimit).toBe(100);
+		// Token should be stored in SecretStorage
+		expect(secrets.store).toHaveBeenCalledWith('copilotCliToken', 'keychain-token');
+		expect(secrets.stored.get('copilotCliToken')).toBe('keychain-token');
+	});
+
+	it('uses SecretStorage token without hitting keychain', async () => {
+		const clock = new FixedClock(Date.parse('2026-03-10T10:00:00.000Z'));
+		const fetch = vi.fn(async () => new Response(JSON.stringify(SUCCESS_RESPONSE), { status: 200 }));
+		const exec = vi.fn(async () => ({ stdout: 'keychain-token\n' }));
+		const secrets = createMockSecrets();
+		// Pre-populate secret storage
+		secrets.stored.set('copilotCliToken', 'stored-token');
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
+			now: clock.now,
+			platform: 'darwin',
+			homeDir: '/Users/test',
+			fileExists: async () => true,
+			exec,
+			readJsonFile: async (path: string) => {
+				if (path.endsWith('config.json')) {
+					return {
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
+					};
+				}
+				return null;
+			},
+			fetch,
+			secrets,
+		});
+
+		await provider.getUsage();
+
+		// Should NOT call keychain
+		expect(exec).not.toHaveBeenCalled();
+		// Should use stored token
 		expect(fetch).toHaveBeenCalledWith(
 			'https://api.github.com/copilot_internal/user',
 			expect.objectContaining({
 				headers: expect.objectContaining({
-					Authorization: 'Bearer keychain-token',
+					Authorization: 'Bearer stored-token',
 				}),
 			})
 		);
 	});
 
-	it('falls back to hosts.json when keychain lookup fails', async () => {
+	it('clears stored token when user logs out', async () => {
+		const secrets = createMockSecrets();
+		secrets.stored.set('copilotCliToken', 'old-token');
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
+			platform: 'darwin',
+			fileExists: async () => true,
+			readJsonFile: async (path: string) => {
+				if (path.endsWith('config.json')) {
+					// No logged_in_users = logged out
+					return { logged_in_users: [] };
+				}
+				return null;
+			},
+			secrets,
+		});
+
+		await provider.getUsage();
+
+		// Token should be cleared
+		expect(secrets.delete).toHaveBeenCalledWith('copilotCliToken');
+	});
+
+	it('falls back to keychain when SecretStorage is empty', async () => {
 		const fetch = vi.fn(async () => new Response(JSON.stringify(SUCCESS_RESPONSE), { status: 200 }));
-		const provider = new CopilotCliProvider({
+		const exec = vi.fn(async () => ({ stdout: 'keychain-token\n' }));
+		const secrets = createMockSecrets();
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
 			platform: 'darwin',
 			homeDir: '/Users/test',
 			fileExists: async () => true,
-			exec: async () => {
-				throw new Error('missing keychain');
-			},
+			exec,
 			readJsonFile: async (path: string) => {
 				if (path.endsWith('config.json')) {
 					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				if (path.endsWith('hosts.json')) {
-					return {
-						'github.com': { oauth_token: 'file-token' },
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
 					};
 				}
 				return null;
 			},
 			fetch,
+			secrets,
+		});
+
+		await provider.getUsage();
+
+		// Should call keychain since SecretStorage was empty
+		expect(exec).toHaveBeenCalledWith(
+			expect.stringContaining('-a "https://github.com:testuser"')
+		);
+	});
+
+	it('falls back to hosts.json when keychain fails', async () => {
+		const fetch = vi.fn(async () => new Response(JSON.stringify(SUCCESS_RESPONSE), { status: 200 }));
+		const secrets = createMockSecrets();
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
+			platform: 'darwin',
+			homeDir: '/Users/test',
+			fileExists: async () => true,
+			exec: async () => {
+				throw new Error('keychain error');
+			},
+			readJsonFile: async (path: string) => {
+				if (path.endsWith('config.json')) {
+					return {
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
+					};
+				}
+				if (path.endsWith('hosts.json')) {
+					return {
+						'https://github.com': { oauth_token: 'file-token' },
+					};
+				}
+				return null;
+			},
+			fetch,
+			secrets,
 		});
 
 		await provider.getUsage();
@@ -103,7 +208,7 @@ describe('CopilotCliProvider', () => {
 	});
 
 	it('reports unavailable when the copilot directory is missing', async () => {
-		const provider = new CopilotCliProvider({
+		const provider = new CopilotCliProvider(createMockContext(), {
 			fileExists: async () => false,
 		});
 
@@ -111,7 +216,7 @@ describe('CopilotCliProvider', () => {
 	});
 
 	it('reports unavailable when config.json has no logged_in_users', async () => {
-		const provider = new CopilotCliProvider({
+		const provider = new CopilotCliProvider(createMockContext(), {
 			fileExists: async () => true,
 			readJsonFile: async () => ({ logged_in_users: [] }),
 		});
@@ -119,52 +224,27 @@ describe('CopilotCliProvider', () => {
 		await expect(provider.isAvailable()).resolves.toBe(false);
 	});
 
-	it('reports unavailable when no token can be found', async () => {
-		const provider = new CopilotCliProvider({
-			platform: 'linux',
-			fileExists: async () => true,
-			exec: async () => {
-				throw new Error('secret-tool not found');
-			},
-			readJsonFile: async (path: string) => {
-				if (path.endsWith('config.json')) {
-					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				// No hosts.json
-				return null;
-			},
-		});
-
-		await expect(provider.isAvailable()).resolves.toBe(false);
-		await expect(provider.getUsage()).resolves.toBeNull();
-	});
-
 	it('returns cached data on 429 responses after cache expires', async () => {
 		const clock = new FixedClock(Date.parse('2026-03-10T10:00:00.000Z'));
 		const fetch = vi.fn(async () => new Response(JSON.stringify(SUCCESS_RESPONSE), { status: 200 }));
-		const provider = new CopilotCliProvider({
+		const secrets = createMockSecrets();
+		secrets.stored.set('copilotCliToken', 'token');
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
 			now: clock.now,
-			platform: 'linux',
+			platform: 'darwin',
 			fileExists: async () => true,
-			exec: async () => {
-				throw new Error('secret-tool not found');
-			},
+			exec: async () => ({ stdout: '' }),
 			readJsonFile: async (path: string) => {
 				if (path.endsWith('config.json')) {
 					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				if (path.endsWith('hosts.json')) {
-					return {
-						'github.com': { oauth_token: 'file-token' },
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
 					};
 				}
 				return null;
 			},
 			fetch,
+			secrets,
 		});
 
 		const first = await provider.getUsage();
@@ -180,27 +260,24 @@ describe('CopilotCliProvider', () => {
 	it('returns stale cached data when the API request throws', async () => {
 		const clock = new FixedClock(Date.parse('2026-03-10T10:00:00.000Z'));
 		const fetch = vi.fn(async () => new Response(JSON.stringify(SUCCESS_RESPONSE), { status: 200 }));
-		const provider = new CopilotCliProvider({
+		const secrets = createMockSecrets();
+		secrets.stored.set('copilotCliToken', 'token');
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
 			now: clock.now,
-			platform: 'linux',
+			platform: 'darwin',
 			fileExists: async () => true,
-			exec: async () => {
-				throw new Error('secret-tool not found');
-			},
+			exec: async () => ({ stdout: '' }),
 			readJsonFile: async (path: string) => {
 				if (path.endsWith('config.json')) {
 					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				if (path.endsWith('hosts.json')) {
-					return {
-						'github.com': { oauth_token: 'file-token' },
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
 					};
 				}
 				return null;
 			},
 			fetch,
+			secrets,
 		});
 
 		const first = await provider.getUsage();
@@ -214,65 +291,28 @@ describe('CopilotCliProvider', () => {
 
 	it('returns null for unlimited quota', async () => {
 		const fetch = vi.fn(async () => new Response(JSON.stringify(UNLIMITED_RESPONSE), { status: 200 }));
-		const provider = new CopilotCliProvider({
-			platform: 'linux',
+		const secrets = createMockSecrets();
+		secrets.stored.set('copilotCliToken', 'token');
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
+			platform: 'darwin',
 			fileExists: async () => true,
-			exec: async () => {
-				throw new Error('secret-tool not found');
-			},
+			exec: async () => ({ stdout: '' }),
 			readJsonFile: async (path: string) => {
 				if (path.endsWith('config.json')) {
 					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				if (path.endsWith('hosts.json')) {
-					return {
-						'github.com': { oauth_token: 'file-token' },
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
 					};
 				}
 				return null;
 			},
 			fetch,
+			secrets,
 		});
 
 		const usage = await provider.getUsage();
 
 		expect(usage).toBeNull();
-	});
-
-	it('uses Linux secret-tool when available', async () => {
-		const fetch = vi.fn(async () => new Response(JSON.stringify(SUCCESS_RESPONSE), { status: 200 }));
-		const exec = vi.fn(async () => ({ stdout: 'secret-tool-token\n' }));
-		const provider = new CopilotCliProvider({
-			platform: 'linux',
-			homeDir: '/home/test',
-			fileExists: async () => true,
-			exec,
-			readJsonFile: async (path: string) => {
-				if (path.endsWith('config.json')) {
-					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				return null;
-			},
-			fetch,
-		});
-
-		await provider.getUsage();
-
-		expect(exec).toHaveBeenCalledWith(
-			expect.stringContaining('secret-tool lookup service copilot-cli')
-		);
-		expect(fetch).toHaveBeenCalledWith(
-			'https://api.github.com/copilot_internal/user',
-			expect.objectContaining({
-				headers: expect.objectContaining({
-					Authorization: 'Bearer secret-tool-token',
-				}),
-			})
-		);
 	});
 
 	it('parses quota windows from response', async () => {
@@ -292,26 +332,23 @@ describe('CopilotCliProvider', () => {
 			quota_reset_date: '2026-03-15T00:00:00.000Z',
 		};
 		const fetch = vi.fn(async () => new Response(JSON.stringify(responseWithWindows), { status: 200 }));
-		const provider = new CopilotCliProvider({
-			platform: 'linux',
+		const secrets = createMockSecrets();
+		secrets.stored.set('copilotCliToken', 'token');
+
+		const provider = new CopilotCliProvider(createMockContext(secrets), {
+			platform: 'darwin',
 			fileExists: async () => true,
-			exec: async () => {
-				throw new Error('secret-tool not found');
-			},
+			exec: async () => ({ stdout: '' }),
 			readJsonFile: async (path: string) => {
 				if (path.endsWith('config.json')) {
 					return {
-						logged_in_users: [{ host: 'github.com', login: 'testuser' }],
-					};
-				}
-				if (path.endsWith('hosts.json')) {
-					return {
-						'github.com': { oauth_token: 'file-token' },
+						logged_in_users: [{ host: 'https://github.com', login: 'testuser' }],
 					};
 				}
 				return null;
 			},
 			fetch,
+			secrets,
 		});
 
 		const usage = await provider.getUsage();

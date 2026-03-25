@@ -62,7 +62,7 @@ const PROVIDER_REGISTRATIONS: ProviderRegistrationDescriptor[] = [
 	{
 		serviceId: 'copilotCli',
 		mode: 'static',
-		create: (_context, factories) => factories?.createCopilotCliProvider?.() ?? new CopilotCliProvider(),
+		create: (context, factories) => factories?.createCopilotCliProvider?.() ?? new CopilotCliProvider(context),
 	},
 	{
 		serviceId: 'antigravity',

@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { UsageProvider } from './base';
 import { QuotaWindowUsage, UsageData } from '../types';
 import { fileExists, readJsonFile, joinPath, getHomeDir } from '../utils';
@@ -10,6 +11,7 @@ const execAsync = promisify(exec);
 
 const SERVICE_NAME = 'Copilot CLI';
 const COPILOT_ENTITLEMENT_URL = 'https://api.github.com/copilot_internal/user';
+const TOKEN_SECRET_KEY = 'copilotCliToken';
 
 interface CopilotCliConfig {
 	logged_in_users?: Array<{
@@ -49,6 +51,12 @@ interface ParsedQuotaSnapshot {
 	observedAt: number;
 }
 
+export interface SecretStorageLike {
+	get(key: string): Thenable<string | undefined>;
+	store(key: string, value: string): Thenable<void>;
+	delete(key: string): Thenable<void>;
+}
+
 export interface CopilotCliProviderDeps {
 	now?: () => number;
 	platform?: NodeJS.Platform;
@@ -57,6 +65,7 @@ export interface CopilotCliProviderDeps {
 	readJsonFile?: <T>(filePath: string) => Promise<T | null>;
 	exec?: (command: string) => Promise<{ stdout: string; stderr?: string }>;
 	fetch?: typeof globalThis.fetch;
+	secrets?: SecretStorageLike;
 }
 
 export class CopilotCliProvider extends UsageProvider {
@@ -64,12 +73,18 @@ export class CopilotCliProvider extends UsageProvider {
 	private readonly CACHE_TTL = 180 * 1000; // 3 minutes
 	private readonly copilotDir: string;
 	private readonly configFile: string;
-	private readonly deps: Required<Omit<CopilotCliProviderDeps, 'fetch'>> & { fetch: typeof globalThis.fetch | undefined };
+	private readonly deps: Required<Omit<CopilotCliProviderDeps, 'fetch' | 'secrets'>> & {
+		fetch: typeof globalThis.fetch | undefined;
+		secrets: SecretStorageLike | undefined;
+	};
 
 	private cachedData: UsageData | null = null;
 	private cacheExpiry: number = 0;
 
-	constructor(deps: CopilotCliProviderDeps = {}) {
+	// In-memory cache for current session (fallback if secrets unavailable)
+	private memoryToken: string | null = null;
+
+	constructor(context: vscode.ExtensionContext, deps: CopilotCliProviderDeps = {}) {
 		super();
 		this.deps = {
 			now: deps.now ?? Date.now,
@@ -79,6 +94,7 @@ export class CopilotCliProvider extends UsageProvider {
 			readJsonFile: deps.readJsonFile ?? readJsonFile,
 			exec: deps.exec ?? execAsync,
 			fetch: deps.fetch ?? globalThis.fetch,
+			secrets: deps.secrets ?? context.secrets,
 		};
 		this.copilotDir = joinPath(this.deps.homeDir, '.copilot');
 		this.configFile = joinPath(this.copilotDir, 'config.json');
@@ -95,18 +111,15 @@ export class CopilotCliProvider extends UsageProvider {
 		}
 
 		// Check if config.json exists and has logged_in_users
+		// We don't check for token here to avoid triggering keychain prompts
+		// The actual token check happens in getUsage()
 		const config = await this.deps.readJsonFile<CopilotCliConfig>(this.configFile);
 		if (!config?.logged_in_users?.length) {
 			return false;
 		}
 
-		// Try to get auth token
-		try {
-			const token = await this.getAuthToken();
-			return token !== null;
-		} catch {
-			return false;
-		}
+		const user = config.logged_in_users[0];
+		return Boolean(user?.host && user?.login);
 	}
 
 	async getUsage(): Promise<UsageData | null> {
@@ -142,64 +155,120 @@ export class CopilotCliProvider extends UsageProvider {
 	}
 
 	/**
-	 * Get OAuth access token from keychain (macOS) or config file
-	 * Follows the same pattern as Claude Code for token discovery
+	 * Get OAuth access token, using VS Code SecretStorage to avoid repeated keychain prompts.
+	 *
+	 * Flow:
+	 * 1. Try VS Code SecretStorage (no system prompts)
+	 * 2. If not found, try system keychain (may prompt once on macOS)
+	 * 3. If keychain succeeds, store in SecretStorage for future use
+	 * 4. Fallback to hosts.json file
 	 */
 	private async getAuthToken(): Promise<string | null> {
-		// Read config to get logged_in_users
+		// Read config to get logged_in_users (needed to verify user is still logged in)
 		const config = await this.deps.readJsonFile<CopilotCliConfig>(this.configFile);
 		if (!config?.logged_in_users?.length) {
+			// User logged out - clear stored token
+			await this.clearStoredToken();
 			return null;
 		}
 
-		// Get the first logged in user
 		const user = config.logged_in_users[0];
 		if (!user?.host || !user?.login) {
 			return null;
 		}
 
-		// Try macOS keychain first
+		// 1. Try VS Code SecretStorage first (no system prompts)
+		if (this.deps.secrets) {
+			try {
+				const storedToken = await this.deps.secrets.get(TOKEN_SECRET_KEY);
+				if (storedToken) {
+					debugLog('[CopilotCli] Using token from SecretStorage');
+					return storedToken;
+				}
+			} catch {
+				debugLog('[CopilotCli] SecretStorage read failed');
+			}
+		}
+
+		// Fallback to in-memory cache if secrets unavailable
+		if (this.memoryToken) {
+			return this.memoryToken;
+		}
+
+		let token: string | null = null;
+
+		// 2. Try macOS keychain (may prompt once)
 		if (this.deps.platform === 'darwin') {
 			try {
 				const keychainAccount = `${user.host}:${user.login}`;
 				const { stdout } = await this.deps.exec(
 					`security find-generic-password -s "copilot-cli" -a "${keychainAccount}" -w 2>/dev/null`
 				);
-				const token = stdout.trim();
+				token = stdout.trim() || null;
 				if (token) {
-					return token;
+					debugLog('[CopilotCli] Got token from macOS keychain');
 				}
 			} catch {
-				// Fall through to config file fallback
-				debugLog('[CopilotCli] Keychain lookup failed, trying config file fallback');
+				debugLog('[CopilotCli] Keychain lookup failed');
 			}
 		}
 
-		// Try Linux secret service (libsecret) via secret-tool
-		if (this.deps.platform === 'linux') {
+		// 3. Try Linux secret service
+		if (!token && this.deps.platform === 'linux') {
 			try {
 				const { stdout } = await this.deps.exec(
 					`secret-tool lookup service copilot-cli account "${user.host}:${user.login}" 2>/dev/null`
 				);
-				const token = stdout.trim();
+				token = stdout.trim() || null;
 				if (token) {
-					return token;
+					debugLog('[CopilotCli] Got token from Linux secret-tool');
 				}
 			} catch {
-				// Fall through to config file fallback
-				debugLog('[CopilotCli] secret-tool lookup failed, trying config file fallback');
+				debugLog('[CopilotCli] secret-tool lookup failed');
 			}
 		}
 
-		// Try reading token from hosts.json (fallback when keychain unavailable)
-		const hostsFile = joinPath(this.copilotDir, 'hosts.json');
-		const hosts = await this.deps.readJsonFile<Record<string, { oauth_token?: string }>>(hostsFile);
-		const hostEntry = hosts?.[user.host];
-		if (hostEntry?.oauth_token) {
-			return hostEntry.oauth_token;
+		// 4. Fallback to hosts.json file
+		if (!token) {
+			const hostsFile = joinPath(this.copilotDir, 'hosts.json');
+			const hosts = await this.deps.readJsonFile<Record<string, { oauth_token?: string }>>(hostsFile);
+			const hostEntry = hosts?.[user.host];
+			token = hostEntry?.oauth_token || null;
+			if (token) {
+				debugLog('[CopilotCli] Got token from hosts.json');
+			}
 		}
 
-		return null;
+		// Store token for future use (avoids future keychain prompts)
+		if (token) {
+			await this.storeToken(token);
+		}
+
+		return token;
+	}
+
+	private async storeToken(token: string): Promise<void> {
+		if (this.deps.secrets) {
+			try {
+				await this.deps.secrets.store(TOKEN_SECRET_KEY, token);
+				debugLog('[CopilotCli] Stored token in SecretStorage');
+			} catch {
+				debugLog('[CopilotCli] Failed to store token in SecretStorage');
+			}
+		}
+		// Also keep in memory as fallback
+		this.memoryToken = token;
+	}
+
+	private async clearStoredToken(): Promise<void> {
+		if (this.deps.secrets) {
+			try {
+				await this.deps.secrets.delete(TOKEN_SECRET_KEY);
+			} catch {
+				// Ignore
+			}
+		}
+		this.memoryToken = null;
 	}
 
 	/**
