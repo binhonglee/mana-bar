@@ -9,6 +9,7 @@ function createUsageManager(usageData: UsageData[]) {
 		onDidUpdateUsage: emitter.event,
 		getAllUsageData: () => usageData,
 		refreshAll: vi.fn(async () => undefined),
+		restartPolling: vi.fn(),
 		fireUpdate: () => emitter.fire(),
 	};
 }
@@ -114,7 +115,7 @@ describe('DashboardPanel', () => {
 			expect.objectContaining({ type: 'usageUpdate' }),
 			expect.objectContaining({ type: 'configUpdate' }),
 		]);
-		expect(usageManager.refreshAll).toHaveBeenCalledTimes(1);
+		expect(usageManager.restartPolling).toHaveBeenCalledTimes(1);
 		expect(configManager.updateServiceConfig).toHaveBeenCalledWith('gemini', { enabled: false });
 		expect((vscode as any).__testing.getConfiguration('manaBar', 'pollingInterval')).toBe(120);
 		expect(configManager.updateDisplayMode).toHaveBeenCalledWith('remaining');

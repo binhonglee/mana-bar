@@ -81,6 +81,14 @@ export class UsageManager {
 	}
 
 	/**
+	 * Restart polling - stops and restarts the timer, triggering an immediate refresh
+	 */
+	restartPolling(): void {
+		this.stopPolling();
+		this.startPolling();
+	}
+
+	/**
 	 * Manually refresh all providers
 	 */
 	async refreshAll(): Promise<void> {

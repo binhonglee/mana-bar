@@ -166,7 +166,7 @@ export class DashboardPanel {
 				this._sendOutageUpdate();
 				break;
 			case 'refresh':
-				this._usageManager.refreshAll();
+				this._usageManager.restartPolling();
 				this._outageClient.refresh().then(() => this._sendOutageUpdate());
 				break;
 			case 'toggleService':

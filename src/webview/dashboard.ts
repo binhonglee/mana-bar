@@ -691,9 +691,21 @@ namespace DashboardApp {
 		});
 
 		window.setInterval(() => {
+			let shouldRefresh = false;
 			document.querySelectorAll<HTMLElement>('.reset-time').forEach((element) => {
+				const resetTime = element.dataset.resetTime;
+				if (resetTime) {
+					const diff = new Date(resetTime).getTime() - Date.now();
+					if (diff <= 0 && diff > -30000) {
+						// Just expired (within last 30 seconds) - trigger refresh
+						shouldRefresh = true;
+					}
+				}
 				element.textContent = formatResetDisplay(element.dataset.resetTime, element.dataset.resetText, element.dataset.resetPrefix || '');
 			});
+			if (shouldRefresh) {
+				vscode.postMessage({ type: 'refresh' });
+			}
 		}, 30000);
 
 		vscode.postMessage({ type: 'ready' });

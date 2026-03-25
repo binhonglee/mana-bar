@@ -185,6 +185,37 @@ describe('UsageManager', () => {
 		expect(manager.getAllUsageData()).toEqual([]);
 	});
 
+	it('restartPolling resets the polling interval timer', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-03-10T10:00:00.000Z'));
+		const usageSpy = vi.fn();
+		const manager = new UsageManager(createConfigManager(undefined, 2)); // 2 second interval
+		manager.registerProvider(new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30), true, usageSpy));
+
+		manager.startPolling();
+		await vi.runAllTicks();
+		expect(usageSpy).toHaveBeenCalledTimes(1); // Initial fetch
+
+		// Advance 1 second (halfway through interval)
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(usageSpy).toHaveBeenCalledTimes(1);
+
+		// Restart polling - should trigger immediate refresh and reset timer
+		manager.restartPolling();
+		await vi.runAllTicks();
+		expect(usageSpy).toHaveBeenCalledTimes(2); // Restart triggered refresh
+
+		// Advance 1 second - old timer would have fired, but new timer shouldn't yet
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(usageSpy).toHaveBeenCalledTimes(2); // No new fetch yet
+
+		// Advance another second - now the new timer should fire
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(usageSpy).toHaveBeenCalledTimes(3);
+
+		manager.stopPolling();
+	});
+
 	it('keeps healthy providers updating when another provider throws and disposes providers', async () => {
 		const disposeSpy = vi.fn();
 		const manager = new UsageManager(createConfigManager());
