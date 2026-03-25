@@ -1,7 +1,5 @@
 ![Landing](assets/screenshots/landing.png)
 
-![Logo](assets/full-width-logo.png)
-
 Track your AI coding quota across Claude Code, Codex, VSCode Copilot, Antigravity, and Gemini CLI — all from one place inside VS Code.
 
 ## Why?
