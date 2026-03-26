@@ -81,7 +81,8 @@ function getStatusEmoji(status: UsageStatus): string {
 }
 
 export function buildUsageBlock(percent: number, totalBlocks = 10): string {
-	const filledBlocks = Math.round(percent / (100 / totalBlocks));
+	const clampedPercent = clampPercent(percent);
+	const filledBlocks = Math.round(clampedPercent / (100 / totalBlocks));
 	return '█'.repeat(filledBlocks) + '░'.repeat(totalBlocks - filledBlocks);
 }
 
