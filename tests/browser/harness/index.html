@@ -14,6 +14,7 @@
 		</div>
 		<nav class="tab-bar">
 			<button class="tab active" data-tab="dashboard">Dashboard</button>
+			<button class="tab" data-tab="status">Status</button>
 			<button class="tab" data-tab="settings">Settings</button>
 		</nav>
 		<div class="header-right">
@@ -34,6 +35,22 @@
 			<h2>No Services Active</h2>
 			<p>Enable LLM services in the Settings tab to start tracking usage.</p>
 			<button id="go-settings-btn" class="btn-primary">Go to Settings</button>
+		</div>
+	</main>
+
+	<main id="status-tab" class="tab-content">
+		<div class="status-container">
+			<div class="status-header">
+				<h2>Active Outages</h2>
+				<button id="report-outage-btn" class="btn-primary">Report Outage</button>
+			</div>
+			<div id="outages-list" class="outages-list">
+				<!-- Outages will be rendered here -->
+			</div>
+			<div id="outages-empty-state" class="empty-state hidden">
+				<h2>All Systems Operational</h2>
+				<p>No active outages reported for tracked services.</p>
+			</div>
 		</div>
 	</main>
 

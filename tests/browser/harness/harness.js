@@ -59,5 +59,10 @@
 				data: { type: 'configUpdate', config },
 			}));
 		},
+		dispatchOutageUpdate(outages) {
+			window.dispatchEvent(new MessageEvent('message', {
+				data: { type: 'outageUpdate', outages },
+			}));
+		},
 	};
 })();

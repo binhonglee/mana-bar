@@ -322,3 +322,239 @@ test('renders the VSCode Copilot toggle in settings', async ({ page }) => {
 	await expect(page.locator('.service-toggle-card')).toContainText(['VSCode Copilot']);
 	await expect(page.locator('#debug-logs-toggle')).toHaveCount(1);
 });
+
+// Outage UI tests
+const sampleOutages = [
+	{
+		issueNumber: 123,
+		issueUrl: 'https://github.com/test/repo/issues/123',
+		title: '[Outage] Claude Code - claude-sonnet-4-6',
+		service: 'Claude Code',
+		model: 'claude-sonnet-4-6',
+		reactionCount: 5,
+		verified: true,
+		createdAt: '2026-03-10T09:00:00.000Z',
+	},
+	{
+		issueNumber: 124,
+		issueUrl: 'https://github.com/test/repo/issues/124',
+		title: '[Outage] Gemini CLI 2.5 Pro',
+		service: 'Gemini CLI 2.5 Pro',
+		reactionCount: 2,
+		verified: false,
+		createdAt: '2026-03-10T08:00:00.000Z',
+	},
+];
+
+test('renders outage items when outages exist in status tab', async ({ page }) => {
+	await loadHarness(page);
+	await pushState(page);
+
+	// Dispatch outage update
+	await page.evaluate((outages) => {
+		window.__dashboardHarness.dispatchOutageUpdate(outages);
+	}, sampleOutages);
+
+	// Switch to status tab
+	await page.click('.tab[data-tab="status"]');
+
+	// Verify outages are rendered
+	await expect(page.locator('.outage-item')).toHaveCount(2);
+	await expect(page.locator('#outages-empty-state')).toHaveClass(/hidden/);
+});
+
+test('renders verified and unverified outage badges correctly', async ({ page }) => {
+	await loadHarness(page);
+	await pushState(page);
+
+	await page.evaluate((outages) => {
+		window.__dashboardHarness.dispatchOutageUpdate(outages);
+	}, sampleOutages);
+
+	await page.click('.tab[data-tab="status"]');
+
+	// Check verified badge
+	await expect(page.locator('.status-badge.verified')).toHaveCount(1);
+	await expect(page.locator('.status-badge.verified')).toContainText('Confirmed');
+
+	// Check unverified badge
+	await expect(page.locator('.status-badge.unverified')).toHaveCount(1);
+	await expect(page.locator('.status-badge.unverified')).toContainText('Unverified');
+});
+
+test('report outage button posts correct message', async ({ page }) => {
+	await loadHarness(page);
+	await pushState(page);
+	await page.evaluate(() => window.__dashboardHarness.clearPostedMessages());
+
+	await page.click('.tab[data-tab="status"]');
+	await page.click('#report-outage-btn');
+
+	const messages = await page.evaluate(() => window.__dashboardHarness.getPostedMessages());
+	expect(messages).toContainEqual({ type: 'reportOutage' });
+});
+
+test('view on GitHub button posts correct message', async ({ page }) => {
+	await loadHarness(page);
+	await pushState(page);
+
+	await page.evaluate((outages) => {
+		window.__dashboardHarness.dispatchOutageUpdate(outages);
+	}, sampleOutages);
+
+	await page.click('.tab[data-tab="status"]');
+	await page.evaluate(() => window.__dashboardHarness.clearPostedMessages());
+
+	// Click the first "View on GitHub" button
+	await page.locator('.outage-view-btn').first().click();
+
+	const messages = await page.evaluate(() => window.__dashboardHarness.getPostedMessages());
+	expect(messages).toContainEqual({ type: 'openOutageUrl', url: 'https://github.com/test/repo/issues/123' });
+});
+
+test('renders outage indicator on service card when outage exists', async ({ page }) => {
+	await loadHarness(page);
+	await pushState(page);
+
+	// Add outage for Claude Code
+	await page.evaluate((outages) => {
+		window.__dashboardHarness.dispatchOutageUpdate(outages);
+	}, [sampleOutages[0]]);
+
+	// Check that the outage indicator appears on the Claude Code card
+	await expect(page.locator('.service-card[data-service="Claude Code"] .card-outage-indicator')).toHaveCount(1);
+	await expect(page.locator('.service-card[data-service="Claude Code"] .card-outage-indicator')).toContainText('1 outage');
+});
+
+test('shows empty state when no outages exist', async ({ page }) => {
+	await loadHarness(page);
+	await pushState(page);
+
+	// Dispatch empty outage update
+	await page.evaluate(() => {
+		window.__dashboardHarness.dispatchOutageUpdate([]);
+	});
+
+	await page.click('.tab[data-tab="status"]');
+
+	// Verify empty state is shown
+	await expect(page.locator('#outages-empty-state')).not.toHaveClass(/hidden/);
+	await expect(page.locator('.outage-item')).toHaveCount(0);
+});
+
+// Edge case tests - use real service IDs to avoid descriptor lookup errors
+test('handles zero limit edge case gracefully', async ({ page }) => {
+	await loadHarness(page);
+
+	const zeroLimitData: UsageData[] = [
+		{
+			serviceId: 'gemini',
+			serviceName: 'Gemini CLI 2.5 Pro',
+			totalUsed: 0,
+			totalLimit: 0,
+			resetTime: new Date('2026-03-10T12:00:00.000Z'),
+			models: [],
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		},
+	];
+
+	await pushState(page, config, zeroLimitData);
+
+	// Should render without crashing
+	await expect(page.locator('.service-card')).toHaveCount(1);
+	// Progress value should show 0 (not NaN or Infinity)
+	await expect(page.locator('.service-card .progress-value')).toHaveText('0');
+});
+
+test('handles empty quota windows array', async ({ page }) => {
+	await loadHarness(page);
+
+	const emptyQuotaData: UsageData[] = [
+		{
+			serviceId: 'gemini',
+			serviceName: 'Gemini CLI 2.5 Pro',
+			totalUsed: 50,
+			totalLimit: 100,
+			resetTime: new Date('2026-03-10T12:00:00.000Z'),
+			quotaWindows: [],
+			models: [],
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		},
+	];
+
+	await pushState(page, config, emptyQuotaData);
+
+	// Should render without crashing
+	await expect(page.locator('.service-card')).toHaveCount(1);
+	// Should not have any quota windows
+	await expect(page.locator('.service-card .quota-window')).toHaveCount(0);
+});
+
+test('handles service with only models (no quota windows)', async ({ page }) => {
+	await loadHarness(page);
+
+	const modelsOnlyData: UsageData[] = [
+		{
+			serviceId: 'antigravity',
+			serviceName: 'Antigravity Gemini Flash',
+			totalUsed: 30,
+			totalLimit: 100,
+			resetTime: new Date('2026-03-10T12:00:00.000Z'),
+			models: [
+				{ modelName: 'model-a', used: 20, limit: 50, resetTime: new Date('2026-03-10T12:00:00.000Z') },
+				{ modelName: 'model-b', used: 10, limit: 50, resetTime: new Date('2026-03-10T12:00:00.000Z') },
+			],
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		},
+	];
+
+	await pushState(page, config, modelsOnlyData);
+
+	await expect(page.locator('.service-card')).toHaveCount(1);
+	// Expand the card to see models
+	await page.click('.service-card .card-expand-btn');
+	await expect(page.locator('.service-card .model-row')).toHaveCount(2);
+});
+
+test('handles 100% usage display correctly', async ({ page }) => {
+	await loadHarness(page);
+
+	const fullUsageData: UsageData[] = [
+		{
+			serviceId: 'gemini',
+			serviceName: 'Gemini CLI 2.5 Pro',
+			totalUsed: 100,
+			totalLimit: 100,
+			resetTime: new Date('2026-03-10T12:00:00.000Z'),
+			models: [],
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		},
+	];
+
+	await pushState(page, config, fullUsageData);
+
+	await expect(page.locator('.service-card')).toHaveCount(1);
+	await expect(page.locator('.service-card .progress-value')).toHaveText('100');
+});
+
+test('handles remaining mode with 100% usage', async ({ page }) => {
+	await loadHarness(page);
+
+	const fullUsageData: UsageData[] = [
+		{
+			serviceId: 'gemini',
+			serviceName: 'Gemini CLI 2.5 Pro',
+			totalUsed: 100,
+			totalLimit: 100,
+			resetTime: new Date('2026-03-10T12:00:00.000Z'),
+			models: [],
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		},
+	];
+
+	await pushState(page, { ...config, displayMode: 'remaining' }, fullUsageData);
+
+	await expect(page.locator('.service-card')).toHaveCount(1);
+	// Remaining should be 0 when at 100% usage
+	await expect(page.locator('.service-card .progress-value')).toHaveText('0');
+});
