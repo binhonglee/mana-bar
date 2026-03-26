@@ -141,6 +141,99 @@ async function testDisplayModeUpdates() {
 	assert.strictEqual(snapshot.displayMode, 'remaining');
 }
 
+async function testServiceToggleDisable() {
+	// Start with all services enabled
+	await enableAllServices();
+
+	// Verify codex is initially in the usage data
+	const initial = await waitFor(
+		'initial state with codex enabled',
+		() => getSnapshot(),
+		snapshot => snapshot !== undefined && snapshot.usageData.some(item => item.serviceName === 'Codex')
+	);
+	assert.ok(initial.usageData.some(item => item.serviceName === 'Codex'), 'Codex should be in initial usage data');
+
+	// Disable codex
+	await updateConfig('services', {
+		claudeCode: { enabled: true },
+		codex: { enabled: false },
+		vscodeCopilot: { enabled: false },
+		antigravity: { enabled: true },
+		gemini: { enabled: true },
+	});
+
+	// Verify codex is no longer in the usage data
+	const afterDisable = await waitFor(
+		'codex disabled state',
+		() => getSnapshot(),
+		snapshot => snapshot !== undefined && !snapshot.usageData.some(item => item.serviceName === 'Codex')
+	);
+	assert.ok(!afterDisable.usageData.some(item => item.serviceName === 'Codex'), 'Codex should not be in usage data after disable');
+}
+
+async function testServiceToggleEnable() {
+	// Start with codex disabled
+	await updateConfig('services', {
+		claudeCode: { enabled: true },
+		codex: { enabled: false },
+		vscodeCopilot: { enabled: false },
+		antigravity: { enabled: true },
+		gemini: { enabled: true },
+	});
+
+	// Verify codex is not in the usage data
+	const initial = await waitFor(
+		'initial state with codex disabled',
+		() => getSnapshot(),
+		snapshot => snapshot !== undefined && !snapshot.usageData.some(item => item.serviceName === 'Codex')
+	);
+	assert.ok(!initial.usageData.some(item => item.serviceName === 'Codex'), 'Codex should not be in initial usage data');
+
+	// Enable codex
+	await updateConfig('services', {
+		claudeCode: { enabled: true },
+		codex: { enabled: true },
+		vscodeCopilot: { enabled: false },
+		antigravity: { enabled: true },
+		gemini: { enabled: true },
+	});
+
+	// Verify codex appears in the usage data
+	const afterEnable = await waitFor(
+		'codex enabled state',
+		() => getSnapshot(),
+		snapshot => snapshot !== undefined && snapshot.usageData.some(item => item.serviceName === 'Codex')
+	);
+	assert.ok(afterEnable.usageData.some(item => item.serviceName === 'Codex'), 'Codex should be in usage data after enable');
+}
+
+async function testHiddenServicesFilter() {
+	// Start with default config (all visible)
+	await resetConfig();
+
+	// Verify Claude Code is in the usage data
+	const initial = await waitFor(
+		'initial state with all visible',
+		() => getSnapshot(),
+		snapshot => snapshot !== undefined && snapshot.usageData.some(item => item.serviceName === 'Claude Code')
+	);
+	assert.ok(initial.usageData.some(item => item.serviceName === 'Claude Code'), 'Claude Code should be in initial usage data');
+
+	// Add Claude Code to hidden services
+	await updateConfig('hiddenServices', ['Claude Code']);
+
+	// The service should still be in usageData (it's hidden, not disabled)
+	// hiddenServices only affects UI display filtering, not the underlying data
+	const afterHide = await waitFor(
+		'Claude Code still in data after hide',
+		() => getSnapshot(),
+		snapshot => snapshot !== undefined && snapshot.usageData.length > 0
+	);
+	// Hidden services should still be present in the raw data
+	assert.ok(afterHide.usageData.some(item => item.serviceName === 'Claude Code'),
+		'Claude Code should still be in usageData (hidden services only filter UI display)');
+}
+
 export async function run(): Promise<void> {
 	await activateExtension();
 	await resetConfig();
@@ -150,8 +243,11 @@ export async function run(): Promise<void> {
 		await testRefreshAdvancesFakeScenario();
 		await testDashboardReuse();
 		await testDisplayModeUpdates();
+		await testServiceToggleDisable();
+		await testServiceToggleEnable();
+		await testHiddenServicesFilter();
 	} finally {
-		await updateConfig('displayMode', 'used');
+		await resetConfig();
 		await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 	}
 }

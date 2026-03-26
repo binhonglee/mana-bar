@@ -186,6 +186,22 @@ export class UsageManager {
 	 * Map service name to config key
 	 */
 	/**
+	 * Clear cache for services that are disabled in config.
+	 * Call this immediately on config change to prevent stale data.
+	 */
+	clearCacheForDisabledServices(): void {
+		const servicesConfig = this.configManager.getServicesConfig();
+		for (const [serviceName, registeredProvider] of this.providers) {
+			const { serviceId } = registeredProvider;
+			const serviceConfig = servicesConfig[serviceId];
+			if (!serviceConfig?.enabled) {
+				debugLog(`[UsageManager] Clearing cache for disabled service: ${serviceName}`);
+				this.cache.delete(serviceName);
+			}
+		}
+	}
+
+	/**
 	 * Dispose resources
 	 */
 	dispose(): void {

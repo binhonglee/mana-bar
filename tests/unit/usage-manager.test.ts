@@ -238,4 +238,35 @@ describe('UsageManager', () => {
 		manager.dispose();
 		expect(disposeSpy).toHaveBeenCalledTimes(1);
 	});
+
+	it('clearCacheForDisabledServices clears cache immediately for disabled services', async () => {
+		// Create a config manager that returns mutable state
+		let servicesEnabled = { codex: true, claudeCode: true };
+		const configManager = {
+			getServicesConfig: () => ({
+				codex: { enabled: servicesEnabled.codex },
+				claudeCode: { enabled: servicesEnabled.claudeCode },
+			}),
+			getPollingInterval: () => 60,
+		} as any;
+
+		const manager = new UsageManager(configManager);
+		manager.registerProvider(new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30)));
+		manager.registerProvider(new FakeProvider('claudeCode', 'Claude Code', usageData('claudeCode', 'Claude Code', 20)));
+
+		// Both services should be cached after refresh
+		await manager.refreshAll();
+		expect(manager.getAllUsageData().map(item => item.serviceName)).toEqual(['Claude Code', 'Codex']);
+
+		// Disable codex via config
+		servicesEnabled.codex = false;
+
+		// Call clearCacheForDisabledServices - should clear cache for disabled services immediately
+		manager.clearCacheForDisabledServices();
+
+		// Codex should be gone from cache immediately, without waiting for next refresh
+		expect(manager.getAllUsageData().map(item => item.serviceName)).toEqual(['Claude Code']);
+		expect(manager.getUsageData('Codex')).toBeNull();
+		expect(manager.getUsageData('Claude Code')).not.toBeNull();
+	});
 });

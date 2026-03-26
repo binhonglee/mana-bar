@@ -100,6 +100,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		usageManager,
 		configManager.onConfigChange(() => {
 			setDebugLoggingEnabled(configManager.getDebugLogs());
+			// Clear cache for disabled services immediately to prevent stale data
+			usageManager?.clearCacheForDisabledServices();
 			// Restart polling when config changes
 			usageManager?.stopPolling();
 			usageManager?.startPolling();
