@@ -145,9 +145,45 @@ describe('OutageReporter', () => {
 
             await reporter.reportOutage();
 
+            // Verify --skip-git-repo-check is passed in every Codex probe call
+            for (const call of mockRunner.run.mock.calls) {
+                expect(call[1]).toContain('--skip-git-repo-check');
+            }
+
             // Verify fallback to existing issue
             expect(vscode.env.openExternal).toHaveBeenCalledTimes(1);
             expect(vscode.env.openExternal).toHaveBeenCalledWith('https://github.com/binhonglee/mana-bar-status/issues/42');
+        });
+
+        it('should always pass --skip-git-repo-check to Codex probes', async () => {
+            vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce({
+                label: 'Codex',
+                serviceId: 'codex'
+            } as any);
+
+            const mockCodexModels = {
+                models: [
+                    { slug: 'gpt-4o', display_name: 'GPT-4o', visibility: 'list', shell_type: 'shell_command' }
+                ]
+            };
+            vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+                if (filePath.toString().includes('models_cache.json')) {
+                    return JSON.stringify(mockCodexModels);
+                }
+                throw new Error('ENOENT');
+            });
+
+            mockRunner.run.mockResolvedValue({ exitCode: 0, stdout: '{"item":{"completed":{"agent_message":"YES"}}}', stderr: '' });
+            mockClient.findExistingOutage.mockResolvedValue(undefined);
+
+            await reporter.reportOutage();
+
+            expect(mockRunner.run).toHaveBeenCalled();
+            for (const call of mockRunner.run.mock.calls) {
+                const [command, args] = call;
+                expect(command).toBe('codex');
+                expect(args).toContain('--skip-git-repo-check');
+            }
         });
         
         it('should report failure if Codex models cannot be found in cache or config', async () => {
