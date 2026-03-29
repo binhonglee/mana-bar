@@ -245,7 +245,7 @@ export class OutageReporter {
 			try {
 				const result = await this.commandRunner.run(
 					'codex',
-					['exec', '--color', 'never', '--json', '--model', model.id, '-'],
+					['exec', '--color', 'never', '--json', '--skip-git-repo-check', '--model', model.id, '-'],
 					{ cwd: this.userHomeDir, input: 'Reply YES' }
 				);
 				const success = result.exitCode === 0 && parseCodexJsonlSuccess(result.stdout);
@@ -413,9 +413,7 @@ export class OutageReporter {
 			}
 
 			if (picked.action === 'all') {
-				for (const m of downModels) {
-					await this.openIssueForModel(service, m, diagnosticText);
-				}
+				await this.openIssueForService(service, diagnosticText);
 			} else if ('model' in picked) {
 				await this.openIssueForModel(service, picked.model!, diagnosticText);
 			}
@@ -429,6 +427,21 @@ export class OutageReporter {
 	): Promise<void> {
 		// Use apiModelId for issue title/URL if available, fall back to label
 		const modelIdentifier = model.apiModelId || model.modelLabel;
+
+		// Check for existing service-wide issue first
+		const existingServiceWide = await this.outageClient.findExistingOutage(service);
+		if (existingServiceWide) {
+			const action = await vscode.window.showInformationMessage(
+				`A service-wide outage has already been reported for ${service}.`,
+				'View active outage', 'File model-specific report anyway'
+			);
+			if (action === 'View active outage') {
+				await vscode.env.openExternal(vscode.Uri.parse(existingServiceWide.issueUrl));
+				return;
+			} else if (!action) {
+				return; // user cancelled
+			}
+		}
 
 		// Check for existing issue (check both apiModelId and label for backwards compatibility)
 		const existing = await this.outageClient.findExistingOutage(service, modelIdentifier)
