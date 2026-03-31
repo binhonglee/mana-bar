@@ -73,6 +73,7 @@ describe('registerUsageProviders', () => {
 				createCodexProvider: () => new StaticProvider('codex', 'Codex'),
 				createCopilotProvider: () => new StaticProvider('vscodeCopilot', 'VSCode Copilot'),
 				createCopilotCliProvider: () => new StaticProvider('copilotCli', 'Copilot CLI'),
+				createCursorProvider: () => new StaticProvider('cursor', 'Cursor'),
 				createAntigravityProvider: () => ({
 					serviceId: 'antigravity' as const,
 					getServiceName: () => 'Antigravity',
@@ -101,6 +102,7 @@ describe('registerUsageProviders', () => {
 			'Codex',
 			'VSCode Copilot',
 			'Copilot CLI',
+			'Cursor',
 			'Antigravity Gemini Flash',
 			'Gemini CLI 2.5 Pro',
 		]);
@@ -120,6 +122,7 @@ describe('registerUsageProviders', () => {
 				createCodexProvider: () => new StaticProvider('codex', 'Codex'),
 				createCopilotProvider: () => new StaticProvider('vscodeCopilot', 'VSCode Copilot'),
 				createCopilotCliProvider: () => new StaticProvider('copilotCli', 'Copilot CLI'),
+				createCursorProvider: () => new StaticProvider('cursor', 'Cursor'),
 				createAntigravityProvider: () => ({
 					serviceId: 'antigravity' as const,
 					getServiceName: () => 'Antigravity',
@@ -149,6 +152,7 @@ describe('registerUsageProviders', () => {
 			'Codex',
 			'VSCode Copilot',
 			'Copilot CLI',
+			'Cursor',
 			'Gemini CLI 2.5 Pro',
 		]);
 	});

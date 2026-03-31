@@ -49,6 +49,13 @@ export const SERVICE_DESCRIPTORS: Record<ServiceId, ServiceDescriptor> = {
 		defaultEnabled: true,
 		getShortLabel: () => 'CopCLI',
 	},
+	cursor: {
+		id: 'cursor',
+		name: 'Cursor',
+		description: 'Cursor usage',
+		defaultEnabled: true,
+		getShortLabel: () => 'Cursor',
+	},
 	antigravity: {
 		id: 'antigravity',
 		name: 'Antigravity',

@@ -123,6 +123,9 @@
             "copilotCli": {
               "enabled": true
             },
+            "cursor": {
+              "enabled": true
+            },
             "antigravity": {
               "enabled": true
             },
