@@ -1,10 +1,10 @@
 ![Landing](assets/screenshots/landing.png)
 
-Track your AI coding quota across Claude Code, Codex, VSCode Copilot, Antigravity, and Gemini CLI — all from one place inside VS Code.
+Track your AI coding quota across Claude Code, Codex, VSCode Copilot, Copilot CLI, Cursor, Antigravity, and Gemini CLI — all from one place inside VS Code-compatible editors like VS Code, Cursor, and Antigravity.
 
 ## Why?
 
-Most AI coding tools don't make it easy to check how much quota you have left. You end up guessing, or hunting through web dashboards while you're in the middle of a flow. mana.bar puts all your limits in one glance — right inside VS Code.
+Most AI coding tools don't make it easy to check how much quota you have left. You end up guessing, or hunting through web dashboards while you're in the middle of a flow. mana.bar puts all your limits in one glance — right inside your editor.
 
 - Read-only. Never touches your quota.
 - Auto-detects credentials you've already set up.
@@ -48,15 +48,17 @@ Enable or disable individual services, adjust polling intervals, pick your displ
 |---------|------|--------------|
 | **Claude Code** | Anthropic OAuth (keychain / `.credentials.json`) | Reads 5-hour and 7-day utilization from the Anthropic usage API |
 | **Codex** | `~/.codex/auth.json` or OS keychain | Spawns `codex app-server` and queries rate limits via JSON-RPC |
-| **VSCode Copilot** | VS Code's built-in Copilot session | Reads completions quota from Copilot's API |
-| **Antigravity** | Auto-detected in Antigravity IDE | Communicates with the Antigravity extension via VS Code messaging |
+| **VSCode Copilot** | VS Code's built-in Copilot session | Reads usage from GitHub Copilot's entitlement API |
+| **Copilot CLI** | `~/.copilot/config.json` plus OS keychain / SecretStorage / `hosts.json` | Reads usage from GitHub Copilot's entitlement API |
+| **Cursor** | Cursor local auth DB (`state.vscdb`) or `MANA_BAR_CURSOR_ACCESS_TOKEN` | Calls Cursor dashboard APIs to show monthly spend plus Auto + Composer / API split usage when available |
+| **Antigravity** | `~/.antigravity_cockpit/credentials.json` or cached local quota data | Reads cached quota files when available, otherwise queries Google quota endpoints directly |
 | **Gemini CLI** | Google OAuth (keychain / `oauth_creds.json`) | Queries `cloudcode-pa.googleapis.com` quota endpoints |
 
-All providers use read-only endpoints and cache responses for 3 minutes.
+Providers use read-only endpoints and short-lived caching (typically 1-3 minutes).
 
 ## Install
 
-[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=binhonglee.mana-bar) · [Open VSX](https://open-vsx.org/extension/binhonglee/mana-bar) · [Cursor](cursor:extension/binhonglee.mana-bar) · [Antigravity](antigravity:extension/binhonglee.mana-bar)
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=binhonglee.mana-bar) · [Open VSX](https://open-vsx.org/extension/binhonglee/mana-bar)
 
 ## Configuration
 
