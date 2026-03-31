@@ -27,6 +27,9 @@ out/testing/**
 out/**/*.map
 media/*.ts
 
+# Dev-only scripts (not used by the packaged extension)
+run_gemini.ts
+
 # Project docs and misc
 README.md
 CHANGELOG.md
