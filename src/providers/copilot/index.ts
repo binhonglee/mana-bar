@@ -33,6 +33,7 @@ export class CopilotProvider extends UsageProvider {
 	private readonly deps: ResolvedCopilotProviderDeps;
 	private initialized = false;
 	private currentSnapshot: CopilotQuotaSnapshot | null = null;
+	private accountLabel: string | null = null;
 	private loggedSignalSources = new Set<string>();
 	private loggedParseFailures = new Set<string>();
 	private loggedAuthSessionSummary: string | null = null;
@@ -133,6 +134,7 @@ export class CopilotProvider extends UsageProvider {
 			resetTime: this.currentSnapshot.resetDate,
 			quotaWindows: this.currentSnapshot.quotaWindows,
 			lastUpdated: new Date(this.currentSnapshot.observedAt),
+			...(this.accountLabel ? { accountKey: `copilot:${this.accountLabel}`, accountKeyLabel: 'GitHub Copilot' } : {}),
 		};
 	}
 
@@ -231,6 +233,7 @@ export class CopilotProvider extends UsageProvider {
 				`[Copilot Auth] Using ${providerId} session for ${session.account.label} scopes=${session.scopes.join(', ')}`
 			);
 		}
+		this.accountLabel = session.account.label;
 
 		const entitlementUrl = this.getEntitlementUrl(providerId);
 		try {

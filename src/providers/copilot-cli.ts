@@ -80,6 +80,7 @@ export class CopilotCliProvider extends UsageProvider {
 
 	private cachedData: UsageData | null = null;
 	private cacheExpiry: number = 0;
+	private accountLogin: string | null = null;
 
 	// In-memory cache for current session (fallback if secrets unavailable)
 	private memoryToken: string | null = null;
@@ -176,6 +177,7 @@ export class CopilotCliProvider extends UsageProvider {
 		if (!user?.host || !user?.login) {
 			return null;
 		}
+		this.accountLogin = user.login;
 
 		// 1. Try VS Code SecretStorage first (no system prompts)
 		if (this.deps.secrets) {
@@ -332,6 +334,7 @@ export class CopilotCliProvider extends UsageProvider {
 			resetTime: snapshot.resetDate,
 			quotaWindows: snapshot.quotaWindows,
 			lastUpdated: new Date(snapshot.observedAt),
+			...(this.accountLogin ? { accountKey: `copilot:${this.accountLogin}`, accountKeyLabel: 'GitHub Copilot' } : {}),
 		};
 	}
 

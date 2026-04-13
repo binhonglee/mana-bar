@@ -37,6 +37,10 @@ export interface UsageData {
 	quotaWindows?: QuotaWindowUsage[];
 	models?: ModelUsage[];
 	lastUpdated: Date;
+	/** Optional dedup key — entries with the same accountKey across providers are deduplicated (first wins) */
+	accountKey?: string;
+	/** Label to use when this entry wins a dedup (overrides serviceName) */
+	accountKeyLabel?: string;
 }
 
 /**

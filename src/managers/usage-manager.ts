@@ -160,8 +160,18 @@ export class UsageManager {
 	 */
 	getAllUsageData(): UsageData[] {
 		const result: UsageData[] = [];
-		for (const [serviceName, entry] of this.cache) {
+		const seenAccountKeys = new Set<string>();
+		for (const [, entry] of this.cache) {
 			if (Date.now() <= entry.expiresAt) {
+				const key = entry.data.accountKey;
+				if (key) {
+					if (seenAccountKeys.has(key)) continue;
+					seenAccountKeys.add(key);
+					if (entry.data.accountKeyLabel) {
+						result.push({ ...entry.data, serviceName: entry.data.accountKeyLabel });
+						continue;
+					}
+				}
 				result.push(entry.data);
 			}
 		}
