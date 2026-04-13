@@ -5,6 +5,8 @@
     "lib": ["ES2022", "DOM"],
     "strict": true,
     "types": [],
+    "rootDir": "src/webview",
+    "ignoreDeprecations": "6.0",
     "skipLibCheck": true,
     "removeComments": false,
     "sourceMap": false,
