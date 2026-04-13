@@ -249,7 +249,9 @@ namespace DashboardApp {
 	}
 
 	function renderModelRows(models?: SerializedModelUsage[]): string {
-		return !models?.length ? '' : models.map((model) => `<div class="model-row" title="${escapeHtml(model.modelName)}" aria-label="${escapeHtml(model.modelName)}">${escapeHtml(model.modelName)}</div>`).join('');
+		if (!models?.length) return '';
+		const rows = models.map((model) => `<div class="model-row" title="${escapeHtml(model.modelName)}" aria-label="${escapeHtml(model.modelName)}">${escapeHtml(model.modelName)}</div>`).join('');
+		return `<div class="card-models-inner">${rows}</div>`;
 	}
 	
 	function getServiceOutages(serviceId: string): SerializedOutageReport[] {
@@ -291,7 +293,7 @@ namespace DashboardApp {
 					<div class="card-dropdown-menu">
 						<button class="menu-item hide-btn card-hide-btn" data-service="${escapeHtml(data.serviceName)}">
 							<span class="menu-icon">${isHidden ? eyeIcon() : eyeOffIcon()}</span>
-							${isHidden ? 'Show on dashboard' : 'Hide from dashboard'}
+							${isHidden ? 'Show' : 'Hide'}
 						</button>
 						<button class="menu-item report-btn" data-service="${escapeHtml(data.serviceId)}">
 							<span class="menu-icon">⚠️</span>

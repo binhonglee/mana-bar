@@ -327,7 +327,7 @@ body {
 	border: 1px solid var(--vscode-widget-border);
 	border-radius: 8px;
 	box-shadow: 0 4px 12px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.15));
-	min-width: 180px;
+	min-width: 148px;
 	z-index: 100;
 	opacity: 0;
 	visibility: hidden;
@@ -384,7 +384,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 12px;
+	gap: 4px;
 	width: 100%;
 }
 
@@ -393,7 +393,6 @@ body {
 	width: 140px;
 	max-width: 100%;
 	aspect-ratio: 1;
-	margin-bottom: 16px;
 }
 
 .progress-ring {
@@ -484,6 +483,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+	padding-bottom: 8px;
 }
 
 .quota-window {
@@ -618,12 +618,24 @@ body {
 
 .card-models {
 	width: 100%;
-	padding-top: 12px;
-	display: none;
+	display: grid;
+	grid-template-rows: 0fr;
+	transition: grid-template-rows var(--transition-base);
 }
 
 .card-models.expanded {
-	display: block;
+	grid-template-rows: 1fr;
+}
+
+.card-models-inner {
+	overflow: hidden;
+	min-height: 0;
+	padding-top: 0;
+	transition: padding-top var(--transition-base);
+}
+
+.card-models.expanded .card-models-inner {
+	padding-top: 12px;
 }
 
 .model-row {
@@ -688,19 +700,6 @@ body {
 	color: var(--text-secondary);
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
-}
-
-.hidden-section .service-card {
-	opacity: 0.5;
-}
-
-.hidden-section .service-card:hover {
-	opacity: 0.8;
-}
-
-.hidden-section .card-hide-btn {
-	opacity: 0.6;
-	pointer-events: auto;
 }
 
 /* ============ Empty State ============ */
