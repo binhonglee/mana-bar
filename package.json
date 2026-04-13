@@ -172,11 +172,11 @@
     "@playwright/test": "1.59.1",
     "@types/node": "25.6.0",
     "@types/vscode": "1.115.0",
-    "@vitest/coverage-v8": "3.2.4",
+    "@vitest/coverage-v8": "4.1.4",
     "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "3.7.1",
     "tsx": "4.21.0",
     "typescript": "6.0.2",
-    "vitest": "3.2.4"
+    "vitest": "4.1.4"
   }
 }
