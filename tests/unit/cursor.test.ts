@@ -44,8 +44,9 @@ describe('CursorProvider', () => {
 		const second = await provider.getUsage();
 
 		expect(first?.serviceId).toBe('cursor');
-		expect(first?.totalUsed).toBe(3);
-		expect(first?.quotaWindows?.map(window => window.label)).toEqual(['Auto + Composer', 'API']);
+		expect(first?.totalUsed).toBe(30); // Critical percentage (auto > api)
+		expect(first?.totalLimit).toBe(100);
+		expect(first?.quotaWindows?.map(window => window.label)).toEqual(['Spend', 'Auto + Composer', 'API']);
 		expect(second).toEqual(first);
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 	});

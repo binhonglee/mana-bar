@@ -69,27 +69,47 @@ export function parseCursorUsageResponse(
 	}
 
 	const resetTime = toDateFromEpochMillis(response.billingCycleEnd);
-	const totalUsed = includedSpendCents / 100;
-	const totalLimit = limitCents / 100;
+	const spendUsed = Math.round(includedSpendCents) / 100;
+	const spendLimit = Math.round(limitCents) / 100;
 	const hasAutoSpillover = pricing?.hasAutoSpillover === true;
 	const autoPercentUsed = toFiniteNumber(planUsage.autoPercentUsed);
 	const apiPercentUsed = toFiniteNumber(planUsage.apiPercentUsed);
 
-	const quotaWindows: QuotaWindowUsage[] = [];
-	if (hasAutoSpillover && autoPercentUsed !== null) {
-		quotaWindows.push(toPercentWindow('Auto + Composer', autoPercentUsed, resetTime));
-	}
-	if (hasAutoSpillover && apiPercentUsed !== null) {
-		quotaWindows.push(toPercentWindow('API', apiPercentUsed, resetTime));
+	// When hasAutoSpillover, pick the most critical percentage quota for totalUsed/totalLimit
+	// (like Codex/Claude Code do), and include spend + all quotas in quotaWindows for dashboard
+	if (hasAutoSpillover && (autoPercentUsed !== null || apiPercentUsed !== null)) {
+		const quotaWindows: QuotaWindowUsage[] = [
+			{ label: 'Spend', used: spendUsed, limit: spendLimit, resetTime },
+		];
+		if (autoPercentUsed !== null) {
+			quotaWindows.push(toPercentWindow('Auto + Composer', autoPercentUsed, resetTime));
+		}
+		if (apiPercentUsed !== null) {
+			quotaWindows.push(toPercentWindow('API', apiPercentUsed, resetTime));
+		}
+
+		// Select the critical (highest) percentage for totalUsed/totalLimit
+		const criticalPercent = Math.max(autoPercentUsed ?? 0, apiPercentUsed ?? 0);
+
+		return {
+			serviceId: 'cursor',
+			serviceName,
+			totalUsed: Math.round(criticalPercent),
+			totalLimit: 100,
+			resetTime,
+			quotaWindows,
+			models: [],
+			lastUpdated,
+		};
 	}
 
+	// Without hasAutoSpillover, just use dollar spend
 	return {
 		serviceId: 'cursor',
 		serviceName,
-		totalUsed,
-		totalLimit,
+		totalUsed: spendUsed,
+		totalLimit: spendLimit,
 		resetTime,
-		quotaWindows: quotaWindows.length > 0 ? quotaWindows : undefined,
 		models: [],
 		lastUpdated,
 	};
