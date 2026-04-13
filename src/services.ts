@@ -72,6 +72,13 @@ export const SERVICE_DESCRIPTORS: Record<ServiceId, ServiceDescriptor> = {
 		defaultEnabled: true,
 		getShortLabel: abbreviateGeminiServiceName,
 	},
+	kiro: {
+		id: 'kiro',
+		name: 'Kiro',
+		description: 'Kiro CLI usage',
+		defaultEnabled: true,
+		getShortLabel: () => 'Kiro',
+	},
 };
 
 export function getServiceDescriptor(serviceId: ServiceId): ServiceDescriptor {

@@ -22,6 +22,7 @@ describe('ConfigManager', () => {
 			cursor: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
+			kiro: { enabled: true },
 		});
 		expect(manager.getHiddenServices()).toEqual([]);
 	});
@@ -46,6 +47,7 @@ describe('ConfigManager', () => {
 			cursor: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
+			kiro: { enabled: true },
 		});
 		expect(manager.getDisplayMode()).toBe('remaining');
 		expect(manager.getStatusBarTooltipLayout()).toBe('monospaced');

@@ -94,6 +94,16 @@ describe('registerUsageProviders', () => {
 						callback(new StaticProvider('gemini', 'Gemini CLI 2.5 Pro'));
 					},
 				}) as any,
+				createKiroProvider: () => ({
+					serviceId: 'kiro' as const,
+					getServiceName: () => 'Kiro',
+					isAvailable: async () => true,
+					getUsage: async () => null,
+					getModels: async () => [],
+					discoverQuotaGroups: async (callback: (provider: UsageProvider) => void) => {
+						callback(new StaticProvider('kiro', 'Kiro'));
+					},
+				}) as any,
 			},
 		});
 
@@ -105,6 +115,7 @@ describe('registerUsageProviders', () => {
 			'Cursor',
 			'Antigravity Gemini Flash',
 			'Gemini CLI 2.5 Pro',
+			'Kiro',
 		]);
 	});
 
@@ -143,6 +154,16 @@ describe('registerUsageProviders', () => {
 						callback(new StaticProvider('gemini', 'Gemini CLI 2.5 Pro'));
 					},
 				}) as any,
+				createKiroProvider: () => ({
+					serviceId: 'kiro' as const,
+					getServiceName: () => 'Kiro',
+					isAvailable: async () => true,
+					getUsage: async () => null,
+					getModels: async () => [],
+					discoverQuotaGroups: async (callback: (provider: UsageProvider) => void) => {
+						callback(new StaticProvider('kiro', 'Kiro'));
+					},
+				}) as any,
 			},
 		});
 
@@ -154,6 +175,7 @@ describe('registerUsageProviders', () => {
 			'Copilot CLI',
 			'Cursor',
 			'Gemini CLI 2.5 Pro',
+			'Kiro',
 		]);
 	});
 });

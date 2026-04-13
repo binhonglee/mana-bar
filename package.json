@@ -131,6 +131,9 @@
             },
             "gemini": {
               "enabled": true
+            },
+            "kiro": {
+              "enabled": true
             }
           },
           "description": "Enable or disable usage tracking for each supported service."

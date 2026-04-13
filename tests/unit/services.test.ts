@@ -19,6 +19,7 @@ describe('service registry', () => {
 			cursor: { enabled: true },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
+			kiro: { enabled: true },
 		});
 	});
 
