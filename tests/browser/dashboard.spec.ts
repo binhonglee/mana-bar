@@ -558,3 +558,42 @@ test('handles remaining mode with 100% usage', async ({ page }) => {
 	// Remaining should be 0 when at 100% usage
 	await expect(page.locator('.service-card .progress-value')).toHaveText('0');
 });
+
+test('renders Cursor-like quota windows with Spend and percentage buckets', async ({ page }) => {
+	await loadHarness(page);
+
+	// Cursor with hasAutoSpillover shows: Spend (dollars) + Auto + API (percentages)
+	const cursorUsageData: UsageData[] = [
+		{
+			serviceId: 'cursor',
+			serviceName: 'Cursor',
+			totalUsed: 42, // Critical percentage
+			totalLimit: 100,
+			resetTime: new Date('2026-04-01T00:00:00.000Z'),
+			quotaWindows: [
+				{ label: 'Spend', used: 3, limit: 20 }, // Dollar-based
+				{ label: 'Auto + Composer', used: 42, limit: 100 },
+				{ label: 'API', used: 15, limit: 100 },
+			],
+			models: [],
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		},
+	];
+
+	await pushState(page, config, cursorUsageData);
+
+	await expect(page.locator('.service-card')).toHaveCount(1);
+	await expect(page.locator('.service-card .quota-window')).toHaveCount(3);
+
+	// Verify all three labels are present
+	const labels = page.locator('.service-card .quota-window-label');
+	await expect(labels.nth(0)).toHaveText('Spend');
+	await expect(labels.nth(1)).toHaveText('Auto + Composer');
+	await expect(labels.nth(2)).toHaveText('API');
+
+	// Verify Spend shows dollar format (3/20), not percentage
+	const values = page.locator('.service-card .quota-window-value');
+	await expect(values.nth(0)).toHaveText('3/20');
+	await expect(values.nth(1)).toHaveText('42%');
+	await expect(values.nth(2)).toHaveText('15%');
+});

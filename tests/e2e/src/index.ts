@@ -61,6 +61,8 @@ async function enableAllServices(): Promise<void> {
 	await updateConfig('services', {
 		claudeCode: { enabled: true },
 		codex: { enabled: true },
+		cursor: { enabled: true },
+		kiro: { enabled: true },
 		vscodeCopilot: { enabled: false },
 		antigravity: { enabled: true },
 		gemini: { enabled: true },
@@ -71,6 +73,8 @@ async function resetConfig(): Promise<void> {
 	await updateConfig('services', {
 		claudeCode: { enabled: true },
 		codex: { enabled: true },
+		cursor: { enabled: true },
+		kiro: { enabled: true },
 		vscodeCopilot: { enabled: false },
 		antigravity: { enabled: true },
 		gemini: { enabled: true },
@@ -90,7 +94,9 @@ async function testActivationAndSnapshot() {
 		'Antigravity Gemini Flash',
 		'Claude Code',
 		'Codex',
+		'Cursor',
 		'Gemini CLI 2.5 Pro',
+		'Kiro',
 	]);
 }
 
@@ -100,9 +106,11 @@ async function testRefreshAdvancesFakeScenario() {
 	const initial = await waitFor(
 		'initial usage data',
 		() => getSnapshot(),
-		snapshot => snapshot !== undefined && snapshot.usageData.length === 4 && snapshot.scenarioIndex === 0
+		snapshot => snapshot !== undefined && snapshot.usageData.length === 6 && snapshot.scenarioIndex === 0
 	);
 	assert.strictEqual(initial.usageData.find(item => item.serviceName === 'Claude Code')?.totalUsed, 42);
+	assert.strictEqual(initial.usageData.find(item => item.serviceName === 'Cursor')?.totalUsed, 42);
+	assert.strictEqual(initial.usageData.find(item => item.serviceName === 'Kiro')?.totalUsed, 120.2);
 
 	await vscode.commands.executeCommand('manaBar.refresh');
 
@@ -112,6 +120,8 @@ async function testRefreshAdvancesFakeScenario() {
 		snapshot => snapshot !== undefined && snapshot.scenarioIndex === 1
 	);
 	assert.strictEqual(refreshed.usageData.find(item => item.serviceName === 'Claude Code')?.totalUsed, 67);
+	assert.strictEqual(refreshed.usageData.find(item => item.serviceName === 'Cursor')?.totalUsed, 68);
+	assert.strictEqual(refreshed.usageData.find(item => item.serviceName === 'Kiro')?.totalUsed, 245.8);
 	assert.strictEqual(refreshed.usageData.find(item => item.serviceName === 'Gemini CLI 2.5 Pro')?.totalUsed, 27);
 }
 
@@ -207,6 +217,71 @@ async function testServiceToggleEnable() {
 	assert.ok(afterEnable.usageData.some(item => item.serviceName === 'Codex'), 'Codex should be in usage data after enable');
 }
 
+async function testPartialProvidersRender() {
+	// Test that the extension renders correctly with only a subset of providers enabled
+	// This verifies resilience when some services are unavailable
+	await updateConfig('services', {
+		claudeCode: { enabled: false },
+		codex: { enabled: false },
+		cursor: { enabled: true },
+		kiro: { enabled: true },
+		vscodeCopilot: { enabled: false },
+		antigravity: { enabled: false },
+		gemini: { enabled: false },
+	});
+
+	// Should only have Cursor and Kiro
+	const snapshot = await waitFor(
+		'partial providers state',
+		() => getSnapshot(),
+		s => s !== undefined && s.usageData.length === 2
+	);
+	assert.strictEqual(snapshot.usageData.length, 2);
+	assert.ok(snapshot.usageData.some(item => item.serviceName === 'Cursor'), 'Cursor should be present');
+	assert.ok(snapshot.usageData.some(item => item.serviceName === 'Kiro'), 'Kiro should be present');
+
+	// Open dashboard - should render without errors
+	await vscode.commands.executeCommand('manaBar.openDashboard');
+
+	const afterDashboard = await waitFor(
+		'dashboard open with partial providers',
+		() => getSnapshot(),
+		s => s !== undefined && s.dashboard.isOpen
+	);
+	assert.strictEqual(afterDashboard.dashboard.isOpen, true);
+}
+
+async function testSingleProviderRender() {
+	// Test rendering with only one provider - edge case for layout
+	await updateConfig('services', {
+		claudeCode: { enabled: false },
+		codex: { enabled: false },
+		cursor: { enabled: true },
+		kiro: { enabled: false },
+		vscodeCopilot: { enabled: false },
+		antigravity: { enabled: false },
+		gemini: { enabled: false },
+	});
+
+	const snapshot = await waitFor(
+		'single provider state',
+		() => getSnapshot(),
+		s => s !== undefined && s.usageData.length === 1
+	);
+	assert.strictEqual(snapshot.usageData.length, 1);
+	assert.strictEqual(snapshot.usageData[0].serviceName, 'Cursor');
+
+	// Open dashboard with single service
+	await vscode.commands.executeCommand('manaBar.openDashboard');
+
+	const afterDashboard = await waitFor(
+		'dashboard open with single provider',
+		() => getSnapshot(),
+		s => s !== undefined && s.dashboard.isOpen
+	);
+	assert.strictEqual(afterDashboard.dashboard.isOpen, true);
+}
+
 async function testHiddenServicesFilter() {
 	// Start with default config (all visible)
 	await resetConfig();
@@ -245,6 +320,8 @@ export async function run(): Promise<void> {
 		await testDisplayModeUpdates();
 		await testServiceToggleDisable();
 		await testServiceToggleEnable();
+		await testPartialProvidersRender();
+		await testSingleProviderRender();
 		await testHiddenServicesFilter();
 	} finally {
 		await resetConfig();

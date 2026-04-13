@@ -146,6 +146,68 @@ function buildScenarioProviders(harness: TestProviderHarness): UsageProvider[] {
 			harness
 		),
 		new FakeSequenceProvider(
+			'cursor',
+			'Cursor',
+			[
+				() => ({
+					serviceId: 'cursor',
+					serviceName: 'Cursor',
+					totalUsed: 42,
+					totalLimit: 100,
+					resetTime: daysFromNow(30),
+					quotaWindows: [
+						{ label: 'Spend', used: 3.5, limit: 20, resetTime: daysFromNow(30) },
+						{ label: 'Auto + Composer', used: 42, limit: 100, resetTime: daysFromNow(30) },
+						{ label: 'API', used: 15, limit: 100, resetTime: daysFromNow(30) },
+					],
+					models: [],
+					lastUpdated: new Date(),
+				}),
+				() => ({
+					serviceId: 'cursor',
+					serviceName: 'Cursor',
+					totalUsed: 68,
+					totalLimit: 100,
+					resetTime: daysFromNow(28),
+					quotaWindows: [
+						{ label: 'Spend', used: 8.25, limit: 20, resetTime: daysFromNow(28) },
+						{ label: 'Auto + Composer', used: 68, limit: 100, resetTime: daysFromNow(28) },
+						{ label: 'API', used: 35, limit: 100, resetTime: daysFromNow(28) },
+					],
+					models: [],
+					lastUpdated: new Date(),
+				}),
+			],
+			[],
+			harness
+		),
+		new FakeSequenceProvider(
+			'kiro',
+			'Kiro',
+			[
+				() => ({
+					serviceId: 'kiro',
+					serviceName: 'Kiro',
+					totalUsed: 120.2,
+					totalLimit: 1000,
+					resetTime: daysFromNow(18),
+					models: [],
+					lastUpdated: new Date(),
+				}),
+				() => ({
+					serviceId: 'kiro',
+					serviceName: 'Kiro',
+					totalUsed: 245.8,
+					totalLimit: 1000,
+					resetTime: daysFromNow(16),
+					models: [],
+					lastUpdated: new Date(),
+				}),
+			],
+			[],
+			harness
+		),
+		new FakeSequenceProvider(
 			'gemini',
 			'Gemini CLI 2.5 Pro',
 			[

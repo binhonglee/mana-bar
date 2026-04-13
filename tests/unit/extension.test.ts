@@ -38,6 +38,8 @@ describe('extension activation', () => {
 		await vscode.workspace.getConfiguration('manaBar').update('services', {
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
+			cursor: { enabled: true },
+			kiro: { enabled: true },
 			vscodeCopilot: { enabled: false },
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
@@ -60,9 +62,11 @@ describe('extension activation', () => {
 			'Antigravity Gemini Flash',
 			'Claude Code',
 			'Codex',
+			'Cursor',
 			'Gemini CLI 2.5 Pro',
+			'Kiro',
 		]);
-		expect(snapshot.usageData).toHaveLength(4);
+		expect(snapshot.usageData).toHaveLength(6);
 		expect(snapshot.scenarioIndex).toBe(1);
 		expect(snapshot.dashboard).toEqual({
 			isOpen: true,
