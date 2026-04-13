@@ -1,6 +1,6 @@
 ![Landing](assets/screenshots/landing.png)
 
-Track your AI coding quota across Claude Code, Codex, VSCode Copilot, Copilot CLI, Cursor, Antigravity, and Gemini CLI — all from one place inside VS Code-compatible editors like VS Code, Cursor, and Antigravity.
+Track your AI coding quota across Claude Code, Codex, VSCode Copilot, Copilot CLI, Cursor, Antigravity, Gemini CLI, and Kiro — all from one place inside VS Code-compatible editors like VS Code, Cursor, and Antigravity.
 
 ## Why?
 
@@ -46,13 +46,14 @@ Enable or disable individual services, adjust polling intervals, pick your displ
 
 | Service | Auth | How it works |
 |---------|------|--------------|
+| **Antigravity** | `~/.antigravity_cockpit/credentials.json` or cached local quota data | Reads cached quota files when available, otherwise queries Google quota endpoints directly |
 | **Claude Code** | Anthropic OAuth (keychain / `.credentials.json`) | Reads 5-hour and 7-day utilization from the Anthropic usage API |
 | **Codex** | `~/.codex/auth.json` or OS keychain | Spawns `codex app-server` and queries rate limits via JSON-RPC |
-| **VSCode Copilot** | VS Code's built-in Copilot session | Reads usage from GitHub Copilot's entitlement API |
 | **Copilot CLI** | `~/.copilot/config.json` plus OS keychain / SecretStorage / `hosts.json` | Reads usage from GitHub Copilot's entitlement API |
 | **Cursor** | Cursor local auth DB (`state.vscdb`) or `MANA_BAR_CURSOR_ACCESS_TOKEN` | Calls Cursor dashboard APIs to show monthly spend plus Auto + Composer / API split usage when available |
-| **Antigravity** | `~/.antigravity_cockpit/credentials.json` or cached local quota data | Reads cached quota files when available, otherwise queries Google quota endpoints directly |
 | **Gemini CLI** | Google OAuth (keychain / `oauth_creds.json`) | Queries `cloudcode-pa.googleapis.com` quota endpoints |
+| **Kiro** | Kiro CLI SQLite DB (`kiro-cli/data.sqlite3`) or Kiro IDE (`~/.aws/sso/cache/kiro-auth-token.json`) | Queries the CodeWhisperer usage API for credit consumption and plan limits |
+| **VSCode Copilot** | VS Code's built-in Copilot session | Reads usage from GitHub Copilot's entitlement API |
 
 Providers use read-only endpoints and short-lived caching (typically 1-3 minutes).
 
