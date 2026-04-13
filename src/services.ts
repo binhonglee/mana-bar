@@ -86,7 +86,7 @@ export function getServiceDescriptor(serviceId: ServiceId): ServiceDescriptor {
 }
 
 export function getServiceDescriptors(): ServiceDescriptor[] {
-	return Object.values(SERVICE_DESCRIPTORS);
+	return Object.values(SERVICE_DESCRIPTORS).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function getDefaultServicesConfig(): ServicesConfig {

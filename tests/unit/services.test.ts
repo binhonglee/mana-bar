@@ -10,7 +10,9 @@ import { SERVICE_IDS } from '../../src/types';
 
 describe('service registry', () => {
 	it('defines descriptors for every supported service', () => {
-		expect(getServiceDescriptors().map((descriptor) => descriptor.id)).toEqual([...SERVICE_IDS]);
+		const service_descriptors = getServiceDescriptors().map((descriptor) => (descriptor.id));
+		service_descriptors.map((descriptor) => expect(SERVICE_IDS).toContain(descriptor));
+		SERVICE_IDS.map((SERVICE_ID) => expect(service_descriptors).toContain(SERVICE_ID));
 		expect(getDefaultServicesConfig()).toEqual({
 			claudeCode: { enabled: true },
 			codex: { enabled: true },
