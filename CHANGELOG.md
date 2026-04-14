@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.4] - 2026-04-13
+### Added
+- **Kiro provider** — Tracks Kiro usage via CLI SQLite DB or IDE auth token, querying the CodeWhisperer usage API for credit consumption and plan limits.
+
+### Changed
+- **Copilot providers** — Deduplicated by account key to avoid showing duplicate entries when both VS Code Copilot and Copilot CLI are enabled.
+- **Service ordering** — Service descriptors now sorted alphabetically by name in the UI.
+- **Dashboard** — Refined card layout spacing for a more compact appearance.
+
+### Fixed
+- **Cursor** — Correctly uses critical percentage for `totalUsed` when `hasAutoSpillover` is enabled.
+
 ## [0.0.3] - 2026-03-31
 ### Added
 - **Outage tracking and reporting** — Fetches open outage issues from the GitHub status repo, probes Claude/Codex models, and lets users report outages. The dashboard Status tab shows active outages with verification badges; the sidebar and status bar show outage indicators; cards expose a “Report outage” action; new command `manaBar.reportOutage`.
