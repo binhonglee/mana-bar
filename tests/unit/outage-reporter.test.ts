@@ -28,9 +28,9 @@ vi.mock('fs/promises', () => ({
 }));
 
 // Mock the OutageClient
-const MockOutageClient = vi.fn(() => ({
-    findExistingOutage: vi.fn()
-}));
+class MockOutageClient {
+    findExistingOutage = vi.fn();
+}
 
 describe('OutageReporter', () => {
     let reporter: OutageReporter;
