@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { promisify } from 'util';
 import { UsageProvider } from './base';
-import { UsageData } from '../types';
+import { ServiceHealth, UsageData } from '../types';
 import { getCacheExpiry, getCachedValue, withStaleFallback } from './cache';
 import { debugLog } from '../logger';
 
@@ -21,6 +21,8 @@ export interface KiroProviderDeps {
 interface KiroToken {
 	access_token: string;
 	profile_arn?: string;
+	/** Epoch ms when the access token expires, if known from the source credential store. */
+	expires_at_ms?: number;
 }
 
 interface KiroUsageLimitsResponse {
@@ -45,6 +47,7 @@ export class KiroProvider extends UsageProvider {
 	private readonly deps: Required<KiroProviderDeps>;
 	private cachedData: UsageData | null = null;
 	private cacheExpiry = 0;
+	private lastHealth: ServiceHealth | null = null;
 
 	constructor(
 		private readonly token: KiroToken,
@@ -74,11 +77,21 @@ export class KiroProvider extends UsageProvider {
 		const cached = getCachedValue(this.cachedData, this.cacheExpiry, this.deps.now());
 		if (cached) return cached;
 
+		// Fail fast on locally expired tokens: surface a reauth-required state and skip
+		// the remote call, since the CodeWhisperer endpoint will just return 401/403.
+		// We intentionally do NOT refresh tokens, since the extension is read-only and
+		// writing back would risk desyncing the user's CLI / IDE session.
+		if (this.isTokenExpired()) {
+			this.lastHealth = this.buildReauthHealth('Kiro credentials have expired.');
+			return null;
+		}
+
 		return withStaleFallback(async () => {
 			const usageData = await this.fetchUsageLimits();
 			if (usageData) {
 				this.cachedData = usageData;
 				this.cacheExpiry = getCacheExpiry(this.deps.now(), this.CACHE_TTL);
+				this.lastHealth = null;
 			}
 			return usageData;
 		}, this.cachedData, (error) => {
@@ -88,6 +101,25 @@ export class KiroProvider extends UsageProvider {
 
 	async getModels(): Promise<string[]> {
 		return [];
+	}
+
+	getLastServiceHealth(): ServiceHealth | null {
+		return this.lastHealth;
+	}
+
+	private isTokenExpired(): boolean {
+		const expiresAt = this.token.expires_at_ms;
+		if (!expiresAt) return false;
+		return this.deps.now() >= expiresAt;
+	}
+
+	private buildReauthHealth(summary: string, detail?: string): ServiceHealth {
+		return {
+			kind: 'reauthRequired',
+			summary,
+			detail: detail ?? 'Sign in again in Kiro CLI or Kiro IDE to resume usage tracking.',
+			lastUpdated: new Date(this.deps.now()),
+		};
 	}
 
 	private async fetchUsageLimits(): Promise<UsageData | null> {
@@ -104,6 +136,11 @@ export class KiroProvider extends UsageProvider {
 
 		if (!response.ok) {
 			debugLog(`[${this.label}] getUsageLimits returned ${response.status}`);
+			if (response.status === 401 || response.status === 403) {
+				this.lastHealth = this.buildReauthHealth(
+					'Kiro credentials were rejected by the usage service.'
+				);
+			}
 			return null;
 		}
 
@@ -115,7 +152,6 @@ export class KiroProvider extends UsageProvider {
 		const totalLimit = Math.round((breakdown.usageLimitWithPrecision ?? 0) * 10) / 10;
 		if (totalLimit === 0 && totalUsed === 0) return null;
 
-		const planName = data.subscriptionInfo?.subscriptionTitle;
 		const resetTime = data.nextDateReset ? new Date(data.nextDateReset * 1000) : undefined;
 
 		return {
@@ -152,8 +188,17 @@ export async function discoverKiroProviders(
 			const { stdout } = await execFn(`sqlite3 "${escaped}" "select value from auth_kv where key='kirocli:social:token' limit 1;"`);
 			const value = stdout.trim();
 			if (value) {
-				const token = JSON.parse(value) as KiroToken;
-				if (token.access_token) found.push({ token, source: 'CLI' });
+				const parsed = JSON.parse(value) as { access_token?: string; profile_arn?: string; expires_at?: string | number };
+				if (parsed.access_token) {
+					found.push({
+						token: {
+							access_token: parsed.access_token,
+							profile_arn: parsed.profile_arn,
+							expires_at_ms: parseExpiresAtMs(parsed.expires_at),
+						},
+						source: 'CLI',
+					});
+				}
 			}
 		} catch { /* not available */ }
 	}
@@ -162,9 +207,16 @@ export async function discoverKiroProviders(
 	const ideCredsPath = path.join(homeDir, '.aws', 'sso', 'cache', 'kiro-auth-token.json');
 	try {
 		const { stdout } = await execFn(`cat "${ideCredsPath}"`);
-		const parsed = JSON.parse(stdout) as { accessToken?: string; profileArn?: string };
+		const parsed = JSON.parse(stdout) as { accessToken?: string; profileArn?: string; expiresAt?: string | number };
 		if (parsed.accessToken) {
-			found.push({ token: { access_token: parsed.accessToken, profile_arn: parsed.profileArn }, source: 'IDE' });
+			found.push({
+				token: {
+					access_token: parsed.accessToken,
+					profile_arn: parsed.profileArn,
+					expires_at_ms: parseExpiresAtMs(parsed.expiresAt),
+				},
+				source: 'IDE',
+			});
 		}
 	} catch { /* not available */ }
 
@@ -201,6 +253,23 @@ export class KiroDiscoverable extends UsageProvider {
 	async discoverQuotaGroups(registerCallback: (provider: UsageProvider) => void): Promise<void> {
 		await discoverKiroProviders(registerCallback, this.deps);
 	}
+}
+
+/**
+ * Normalize the many shapes an expiry field can take into epoch ms:
+ * - Numeric seconds (< 1e12) or milliseconds
+ * - ISO 8601 string
+ * Returns undefined if the input cannot be parsed.
+ */
+function parseExpiresAtMs(value: unknown): number | undefined {
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		return value < 1e12 ? value * 1000 : value;
+	}
+	if (typeof value === 'string' && value.length > 0) {
+		const parsed = Date.parse(value);
+		if (!Number.isNaN(parsed)) return parsed;
+	}
+	return undefined;
 }
 
 function getDbPath(platform: NodeJS.Platform, homeDir: string, env: NodeJS.ProcessEnv): string | null {

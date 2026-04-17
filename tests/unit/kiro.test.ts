@@ -68,6 +68,67 @@ describe('KiroProvider', () => {
 		expect(await provider.getUsage()).toBeNull();
 	});
 
+	it('reports reauthRequired health when the API returns 401', async () => {
+		const fetch = vi.fn(async () => new Response('Unauthorized', { status: 401 }));
+		const provider = new KiroProvider({ access_token: 'bad-token' }, 'Kiro', { fetch });
+
+		await provider.getUsage();
+
+		const health = provider.getLastServiceHealth();
+		expect(health?.kind).toBe('reauthRequired');
+		expect(health?.summary).toMatch(/rejected/i);
+	});
+
+	it('reports reauthRequired health when the API returns 403', async () => {
+		const fetch = vi.fn(async () => new Response('Forbidden', { status: 403 }));
+		const provider = new KiroProvider({ access_token: 'bad-token' }, 'Kiro', { fetch });
+
+		await provider.getUsage();
+
+		expect(provider.getLastServiceHealth()?.kind).toBe('reauthRequired');
+	});
+
+	it('skips the remote call and reports reauthRequired when local token is already expired', async () => {
+		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
+		const fetch = vi.fn();
+		const provider = new KiroProvider(
+			{
+				access_token: 'expired',
+				expires_at_ms: Date.parse('2026-04-11T00:00:00.000Z'),
+			},
+			'Kiro',
+			{ now: clock.now, fetch }
+		);
+
+		const result = await provider.getUsage();
+
+		expect(result).toBeNull();
+		expect(fetch).not.toHaveBeenCalled();
+		expect(provider.getLastServiceHealth()?.kind).toBe('reauthRequired');
+	});
+
+	it('clears prior reauth health after a successful usage fetch', async () => {
+		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
+		let status = 401;
+		const fetch = vi.fn(async () => status === 200
+			? new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 })
+			: new Response('Unauthorized', { status }));
+		const provider = new KiroProvider(
+			{ access_token: 'token', profile_arn: 'arn:test' },
+			'Kiro',
+			{ now: clock.now, fetch }
+		);
+
+		await provider.getUsage();
+		expect(provider.getLastServiceHealth()?.kind).toBe('reauthRequired');
+
+		status = 200;
+		clock.advance(4 * 60 * 1000);
+		const result = await provider.getUsage();
+		expect(result).not.toBeNull();
+		expect(provider.getLastServiceHealth()).toBeNull();
+	});
+
 	it('returns null when usageBreakdownList is empty', async () => {
 		const fetch = vi.fn(async () => new Response(JSON.stringify({ usageBreakdownList: [] }), { status: 200 }));
 		const provider = new KiroProvider({ access_token: 'token' }, 'Kiro', { fetch });
@@ -162,6 +223,52 @@ describe('discoverKiroProviders', () => {
 
 		expect(registered).toHaveLength(2);
 		expect(registered.map(r => r.name)).toEqual(['Kiro CLI', 'Kiro IDE']);
+	});
+
+	it('propagates expiry from CLI token (epoch seconds) so getUsage can flag reauth', async () => {
+		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
+		const fetch = vi.fn();
+		const cliTokenJson = JSON.stringify({
+			access_token: 'cli-expired',
+			profile_arn: 'arn:aws:codewhisperer:us-east-1:000:profile/X',
+			expires_at: Math.floor(Date.parse('2026-04-11T00:00:00.000Z') / 1000),
+		});
+		const exec = makeExec(cliTokenJson, null);
+		const providers: KiroProvider[] = [];
+
+		await discoverKiroProviders(
+			(p) => providers.push(p as KiroProvider),
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, now: clock.now, fetch }
+		);
+
+		expect(providers).toHaveLength(1);
+		const result = await providers[0].getUsage();
+		expect(result).toBeNull();
+		expect(fetch).not.toHaveBeenCalled();
+		expect(providers[0].getLastServiceHealth()?.kind).toBe('reauthRequired');
+	});
+
+	it('propagates expiry from IDE token (ISO string) so getUsage can flag reauth', async () => {
+		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
+		const fetch = vi.fn();
+		const ideCredsJson = JSON.stringify({
+			accessToken: 'ide-expired',
+			profileArn: 'arn:aws:codewhisperer:us-east-1:000:profile/Y',
+			expiresAt: '2026-04-11T00:00:00.000Z',
+		});
+		const exec = makeExec(null, ideCredsJson);
+		const providers: KiroProvider[] = [];
+
+		await discoverKiroProviders(
+			(p) => providers.push(p as KiroProvider),
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, now: clock.now, fetch }
+		);
+
+		expect(providers).toHaveLength(1);
+		const result = await providers[0].getUsage();
+		expect(result).toBeNull();
+		expect(fetch).not.toHaveBeenCalled();
+		expect(providers[0].getLastServiceHealth()?.kind).toBe('reauthRequired');
 	});
 
 	it('registers nothing when no creds exist', async () => {
