@@ -1,6 +1,6 @@
 import { ConfigManager } from './managers/config-manager';
 import { ServiceDescriptor, getServiceDescriptors } from './services';
-import { ServiceId, ServicesConfig, StatusBarTooltipLayout, UsageData, UsageDisplayMode, UsageStatus } from './types';
+import { ServiceHealth, ServiceHealthKind, ServiceId, ServicesConfig, ServiceSnapshot, StatusBarTooltipLayout, UsageData, UsageDisplayMode, UsageStatus } from './types';
 import { toServiceViewModel, toUsageMetricViewModel } from './usage-display';
 import { SerializedOutageReport } from './outage/outage-types';
 
@@ -44,6 +44,20 @@ export interface SerializedUsageData extends SerializedUsageMetric {
 	lastUpdated: string;
 }
 
+export interface SerializedServiceHealth {
+	kind: ServiceHealthKind;
+	summary: string;
+	detail?: string;
+	lastUpdated: string;
+}
+
+export interface SerializedServiceSnapshot {
+	serviceId: ServiceId;
+	serviceName: string;
+	usage?: SerializedUsageData;
+	health?: SerializedServiceHealth;
+}
+
 export interface DashboardConfigPayload {
 	displayMode: UsageDisplayMode;
 	statusBarTooltipLayout: StatusBarTooltipLayout;
@@ -55,7 +69,7 @@ export interface DashboardConfigPayload {
 }
 
 export type HostToWebviewMessage =
-	| { type: 'usageUpdate'; data: SerializedUsageData[]; timestamp: string }
+	| { type: 'usageUpdate'; data: SerializedServiceSnapshot[]; timestamp: string }
 	| { type: 'configUpdate'; config: DashboardConfigPayload }
 	| { type: 'outageUpdate'; outages: SerializedOutageReport[] };
 
@@ -94,6 +108,27 @@ function serializeModels(models: UsageData['models']): SerializedModelUsage[] | 
 		limit: model.limit,
 		resetTime: model.resetTime?.toISOString(),
 	}));
+}
+
+export function serializeServiceHealth(health: ServiceHealth): SerializedServiceHealth {
+	return {
+		kind: health.kind,
+		summary: health.summary,
+		detail: health.detail,
+		lastUpdated: health.lastUpdated.toISOString(),
+	};
+}
+
+export function serializeServiceSnapshot(
+	snapshot: ServiceSnapshot,
+	displayMode: DashboardConfigPayload['displayMode']
+): SerializedServiceSnapshot {
+	return {
+		serviceId: snapshot.serviceId,
+		serviceName: snapshot.serviceName,
+		usage: snapshot.usage ? serializeUsageData(snapshot.usage, displayMode) : undefined,
+		health: snapshot.health ? serializeServiceHealth(snapshot.health) : undefined,
+	};
 }
 
 export function serializeUsageData(data: UsageData, displayMode: DashboardConfigPayload['displayMode']): SerializedUsageData {

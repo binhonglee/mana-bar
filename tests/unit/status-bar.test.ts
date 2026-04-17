@@ -22,6 +22,11 @@ function createUsageManager(usageData: UsageData[]) {
 	return {
 		onDidUpdateUsage: emitter.event,
 		getAllUsageData: () => usageData,
+		getServiceSnapshots: () => usageData.map((usage) => ({
+			serviceId: usage.serviceId,
+			serviceName: usage.serviceName,
+			usage,
+		})),
 	};
 }
 

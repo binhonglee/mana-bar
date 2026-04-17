@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { buildDashboardConfigPayload, HostToWebviewMessage, serializeUsageData, WebviewToHostMessage } from '../dashboard-serialization';
+import { buildDashboardConfigPayload, HostToWebviewMessage, serializeServiceSnapshot, WebviewToHostMessage } from '../dashboard-serialization';
 import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
 import { OutageClient } from '../outage/outage-client';
@@ -142,10 +142,11 @@ export class DashboardPanel {
 	}
 
 	private _sendUsageUpdate(): void {
-		const allUsage = this._usageManager.getAllUsageData();
+		const snapshots = this._usageManager.getServiceSnapshots();
+		const displayMode = this._configManager.getDisplayMode();
 		const message: HostToWebviewMessage = {
 			type: 'usageUpdate',
-			data: allUsage.map((usage) => serializeUsageData(usage, this._configManager.getDisplayMode())),
+			data: snapshots.map((snapshot) => serializeServiceSnapshot(snapshot, displayMode)),
 			timestamp: new Date().toISOString(),
 		};
 		this._panel.webview.postMessage(message);

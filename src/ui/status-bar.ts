@@ -1,9 +1,28 @@
 import * as vscode from 'vscode';
 import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
-import { StatusBarTooltipLayout, UsageData } from '../types';
+import { ServiceHealthKind, ServiceSnapshot, StatusBarTooltipLayout } from '../types';
+import { getShortServiceLabel } from '../services';
 import { buildUsageBlock, toServiceViewModel } from '../usage-display';
 import { OutageClient } from '../outage/outage-client';
+
+function healthKindLabel(kind: ServiceHealthKind): string {
+	switch (kind) {
+		case 'reauthRequired': return 'Reauth needed';
+		case 'rateLimited': return 'Rate limited';
+		case 'unavailable': return 'Unavailable';
+		default: return 'Unknown';
+	}
+}
+
+function healthKindEmoji(kind: ServiceHealthKind): string {
+	switch (kind) {
+		case 'reauthRequired': return '🔑';
+		case 'rateLimited': return '⏳';
+		case 'unavailable': return '⚠️';
+		default: return '⚠️';
+	}
+}
 
 /**
  * Manages the status bar item for displaying usage summary
@@ -43,10 +62,10 @@ export class StatusBarController {
 	private update(): void {
 		const displayMode = this.configManager?.getDisplayMode() ?? 'remaining';
 		const hidden = this.configManager?.getHiddenServices() ?? [];
-		const allUsage = this.usageManager.getAllUsageData()
-			.filter(u => !hidden.includes(u.serviceName));
+		const snapshots = this.usageManager.getServiceSnapshots()
+			.filter(s => !hidden.includes(s.serviceName));
 
-		if (allUsage.length === 0) {
+		if (snapshots.length === 0) {
 			this.statusBarItem.text = 'mana.bar: No data';
 			this.statusBarItem.backgroundColor = undefined;
 			this.statusBarItem.tooltip = 'No services configured or available';
@@ -56,70 +75,92 @@ export class StatusBarController {
 		// Build compact summary with per-service status emoji
 		const parts: string[] = [];
 
-		for (const usage of allUsage) {
-			const viewModel = toServiceViewModel(usage, displayMode);
-
-			// Skip if no limit (means we haven't fetched quota data yet)
-			if (usage.totalLimit === 0) {
-				parts.push(`${viewModel.shortLabel}: --/--`);
-				continue;
+		for (const snapshot of snapshots) {
+			const usage = snapshot.usage;
+			if (usage) {
+				const viewModel = toServiceViewModel(usage, displayMode);
+				// Skip if no limit (means we haven't fetched quota data yet)
+				if (usage.totalLimit === 0) {
+					parts.push(`${viewModel.shortLabel}: --/--`);
+					continue;
+				}
+				parts.push(`${viewModel.statusEmoji} ${viewModel.shortLabel}: ${viewModel.summaryText}`);
+			} else if (snapshot.health) {
+				const shortLabel = getShortServiceLabel(snapshot.serviceId, snapshot.serviceName);
+				parts.push(`${healthKindEmoji(snapshot.health.kind)} ${shortLabel}: ${healthKindLabel(snapshot.health.kind)}`);
 			}
-			parts.push(`${viewModel.statusEmoji} ${viewModel.shortLabel}: ${viewModel.summaryText}`);
 		}
-		
+
 		// Check for outages across all tracked services
 		const outages = this.outageClient?.getCachedData()?.reports;
 		let outageCount = 0;
-		if (outages && allUsage.length > 0) {
-			const trackedServiceNames = new Set(allUsage.map(u => u.serviceName.toLowerCase()));
+		if (outages && snapshots.length > 0) {
+			const trackedServiceNames = new Set(snapshots.map(s => s.serviceName.toLowerCase()));
 			outageCount = outages.filter(o => trackedServiceNames.has(o.service.toLowerCase())).length;
 		}
 
 		const baseText = parts.join(' • ');
-		this.statusBarItem.text = outageCount > 0 
-			? `⚠️ ${outageCount} outage${outageCount === 1 ? '' : 's'} | ${baseText}` 
+		this.statusBarItem.text = outageCount > 0
+			? `⚠️ ${outageCount} outage${outageCount === 1 ? '' : 's'} | ${baseText}`
 			: baseText;
-		
-		this.statusBarItem.backgroundColor = outageCount > 0 
-			? new vscode.ThemeColor('statusBarItem.warningBackground') 
+
+		this.statusBarItem.backgroundColor = outageCount > 0
+			? new vscode.ThemeColor('statusBarItem.warningBackground')
 			: undefined;
 
 		const tooltipLayout = this.configManager?.getStatusBarTooltipLayout() ?? 'regular';
 		this.statusBarItem.tooltip = new vscode.MarkdownString(
-			this.buildTooltip(allUsage, displayMode, tooltipLayout) + '\n\n_Click to open dashboard_'
+			this.buildTooltip(snapshots, displayMode, tooltipLayout) + '\n\n_Click to open dashboard_'
 		);
 	}
 
 	private buildTooltip(
-		allUsage: UsageData[],
+		snapshots: ServiceSnapshot[],
 		displayMode: 'used' | 'remaining',
 		layout: StatusBarTooltipLayout
 	): string {
 		if (layout === 'monospaced') {
-			return this.buildTooltipMonospaced(allUsage, displayMode);
+			return this.buildTooltipMonospaced(snapshots, displayMode);
 		}
 
-		return this.buildTooltipRegular(allUsage, displayMode);
+		return this.buildTooltipRegular(snapshots, displayMode);
 	}
 
-	private buildTooltipRegular(allUsage: UsageData[], displayMode: 'used' | 'remaining'): string {
-		const tooltipRows = allUsage.map(usage => {
-			const viewModel = toServiceViewModel(usage, displayMode);
-			const resetStr = viewModel.resetText ? `↻ ${viewModel.resetText}` : '—';
-			return `| ${viewModel.statusEmoji} ${usage.serviceName} | ${viewModel.displayText} | ${resetStr} |`;
+	private buildTooltipRegular(snapshots: ServiceSnapshot[], displayMode: 'used' | 'remaining'): string {
+		const tooltipRows = snapshots.map(snapshot => {
+			const usage = snapshot.usage;
+			if (usage) {
+				const viewModel = toServiceViewModel(usage, displayMode);
+				const resetStr = viewModel.resetText ? `↻ ${viewModel.resetText}` : '—';
+				return `| ${viewModel.statusEmoji} ${snapshot.serviceName} | ${viewModel.displayText} | ${resetStr} |`;
+			}
+			const health = snapshot.health;
+			const emoji = health ? healthKindEmoji(health.kind) : '⚠️';
+			const display = health ? healthKindLabel(health.kind) : 'Unavailable';
+			return `| ${emoji} ${snapshot.serviceName} | ${display} | — |`;
 		});
 
 		return `| Service | Usage | Reset |\n|:--|:--|--:|\n${tooltipRows.join('\n')}`;
 	}
 
-	private buildTooltipMonospaced(allUsage: UsageData[], displayMode: 'used' | 'remaining'): string {
-		const rows = allUsage.map(usage => {
-			const viewModel = toServiceViewModel(usage, displayMode);
+	private buildTooltipMonospaced(snapshots: ServiceSnapshot[], displayMode: 'used' | 'remaining'): string {
+		const rows = snapshots.map(snapshot => {
+			const usage = snapshot.usage;
+			if (usage) {
+				const viewModel = toServiceViewModel(usage, displayMode);
+				return {
+					state: viewModel.statusEmoji,
+					service: snapshot.serviceName,
+					display: buildUsageBlock(viewModel.displayPercent),
+					reset: viewModel.resetText ? `↻ ${viewModel.resetText}` : '—',
+				};
+			}
+			const health = snapshot.health;
 			return {
-				state: viewModel.statusEmoji,
-				service: viewModel.serviceName,
-				display: buildUsageBlock(viewModel.displayPercent),
-				reset: viewModel.resetText ? `↻ ${viewModel.resetText}` : '—',
+				state: health ? healthKindEmoji(health.kind) : '⚠️',
+				service: snapshot.serviceName,
+				display: health ? healthKindLabel(health.kind) : 'Unavailable',
+				reset: '—',
 			};
 		});
 

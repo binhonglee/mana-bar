@@ -4,7 +4,8 @@ namespace DashboardApp {
 	type UsageStatus = 'ok' | 'warning' | 'critical';
 	type DisplayMode = 'used' | 'remaining';
 	type TooltipLayout = 'regular' | 'monospaced';
-	type ServiceId = 'claudeCode' | 'codex' | 'vscodeCopilot' | 'antigravity' | 'gemini';
+	type ServiceId = 'claudeCode' | 'codex' | 'vscodeCopilot' | 'antigravity' | 'gemini' | 'kiro' | 'cursor' | 'copilotCli';
+	type ServiceHealthKind = 'reauthRequired' | 'rateLimited' | 'unavailable';
 
 	interface ServiceDescriptor {
 		id: ServiceId;
@@ -54,6 +55,20 @@ namespace DashboardApp {
 		lastUpdated: string;
 	}
 
+	interface SerializedServiceHealth {
+		kind: ServiceHealthKind;
+		summary: string;
+		detail?: string;
+		lastUpdated: string;
+	}
+
+	interface SerializedServiceSnapshot {
+		serviceId: ServiceId;
+		serviceName: string;
+		usage?: SerializedUsageData;
+		health?: SerializedServiceHealth;
+	}
+
 	interface DashboardConfig {
 		displayMode: DisplayMode;
 		statusBarTooltipLayout: TooltipLayout;
@@ -76,7 +91,7 @@ namespace DashboardApp {
 	}
 
 	type HostToWebviewMessage =
-		| { type: 'usageUpdate'; data: SerializedUsageData[]; timestamp: string }
+		| { type: 'usageUpdate'; data: SerializedServiceSnapshot[]; timestamp: string }
 		| { type: 'configUpdate'; config: DashboardConfig }
 		| { type: 'outageUpdate'; outages: SerializedOutageReport[] };
 
@@ -93,7 +108,7 @@ namespace DashboardApp {
 		| { type: 'openOutageUrl'; url: string };
 
 	interface State {
-		usageData: SerializedUsageData[];
+		snapshots: SerializedServiceSnapshot[];
 		outages: SerializedOutageReport[];
 		config: DashboardConfig | null;
 		activeTab: string;
@@ -107,8 +122,11 @@ namespace DashboardApp {
 	}
 
 	const vscode = acquireVsCodeApi();
-	const state: State = { usageData: [], outages: [], config: null, activeTab: 'dashboard', expandedCards: {} };
+	const state: State = { snapshots: [], outages: [], config: null, activeTab: 'dashboard', expandedCards: {} };
 	Object.assign(state, vscode.getState() || {});
+	if (!Array.isArray(state.snapshots)) {
+		state.snapshots = [];
+	}
 
 	const RING_SIZE = 140;
 	const RING_CENTER = 70;
@@ -144,6 +162,31 @@ namespace DashboardApp {
 				? `segments:${data.progressSegments}`
 				: 'ring';
 		return `${metricLayout}:${data.models && data.models.length > 1 ? 'models' : 'nomodels'}`;
+	}
+
+	function getSnapshotLayoutKey(snapshot: SerializedServiceSnapshot): string {
+		if (!snapshot.usage) {
+			return `health:${snapshot.health?.kind ?? 'unknown'}`;
+		}
+		return getCardLayoutKey(snapshot.usage);
+	}
+
+	function healthKindLabel(kind: ServiceHealthKind): string {
+		switch (kind) {
+			case 'reauthRequired': return 'Reauth needed';
+			case 'rateLimited': return 'Rate limited';
+			case 'unavailable': return 'Unavailable';
+			default: return 'Unknown';
+		}
+	}
+
+	function healthStatusClass(kind: ServiceHealthKind): string {
+		switch (kind) {
+			case 'reauthRequired': return 'warning';
+			case 'rateLimited': return 'warning';
+			case 'unavailable': return 'critical';
+			default: return 'warning';
+		}
 	}
 
 	function getActiveSegmentCount(displayPercent: number, segmentCount = 0): number {
@@ -275,27 +318,51 @@ namespace DashboardApp {
 		`;
 	}
 
-	function createServiceCard(data: SerializedUsageData, index: number): HTMLElement {
+	function renderHealthBody(health: SerializedServiceHealth): string {
+		return `
+			<div class="card-health" data-health-kind="${escapeHtml(health.kind)}">
+				<div class="card-health-label">${escapeHtml(healthKindLabel(health.kind))}</div>
+				<div class="card-health-summary">${escapeHtml(health.summary)}</div>
+				${health.detail ? `<div class="card-health-detail">${escapeHtml(health.detail)}</div>` : ''}
+			</div>
+		`;
+	}
+
+	function createServiceCard(snapshot: SerializedServiceSnapshot, index: number): HTMLElement {
 		const card = document.createElement('div');
-		const hasModels = Boolean(data.models && data.models.length > 1);
-		card.className = `service-card status-${data.status}`;
-		card.dataset.service = data.serviceName;
-		card.dataset.layout = getCardLayoutKey(data);
+		const usage = snapshot.usage;
+		const health = snapshot.health;
+		const hasModels = Boolean(usage?.models && usage.models.length > 1);
+		const statusClass = usage ? usage.status : (health ? healthStatusClass(health.kind) : 'ok');
+		card.className = `service-card status-${statusClass}${usage ? '' : ' health-only'}`;
+		card.dataset.service = snapshot.serviceName;
+		card.dataset.layout = getSnapshotLayoutKey(snapshot);
 		card.style.animationDelay = `${index * 0.05}s`;
-		
-		const isHidden = isServiceHidden(data.serviceName);
-		
+
+		const isHidden = isServiceHidden(snapshot.serviceName);
+
+		const body = usage
+			? `
+				${renderMetricSection(usage)}
+				${renderOutageIndicator(snapshot.serviceName)}
+				${hasQuotaWindows(usage) ? '' : `<div class="card-details"><div class="detail-row"><span class="detail-label">Resets in</span><span class="detail-value reset-time" data-reset-time="${usage.resetTime || ''}" data-reset-prefix="" data-reset-text="${usage.resetText || ''}">${formatResetDisplay(usage.resetTime, usage.resetText)}</span></div></div>`}
+			`
+			: `
+				${health ? renderHealthBody(health) : ''}
+				${renderOutageIndicator(snapshot.serviceName)}
+			`;
+
 		card.innerHTML = `
-			<div class="card-header" title="${escapeHtml(data.serviceName)}">
-				<span class="service-name" aria-label="${escapeHtml(data.serviceName)}">${escapeHtml(data.serviceName)}</span>
+			<div class="card-header" title="${escapeHtml(snapshot.serviceName)}">
+				<span class="service-name" aria-label="${escapeHtml(snapshot.serviceName)}">${escapeHtml(snapshot.serviceName)}</span>
 				<div class="card-menu-container">
 					<button class="card-menu-btn" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">⋮</button>
 					<div class="card-dropdown-menu">
-						<button class="menu-item hide-btn card-hide-btn" data-service="${escapeHtml(data.serviceName)}">
+						<button class="menu-item hide-btn card-hide-btn" data-service="${escapeHtml(snapshot.serviceName)}">
 							<span class="menu-icon">${isHidden ? eyeIcon() : eyeOffIcon()}</span>
 							${isHidden ? 'Show' : 'Hide'}
 						</button>
-						<button class="menu-item report-btn" data-service="${escapeHtml(data.serviceId)}">
+						<button class="menu-item report-btn" data-service="${escapeHtml(snapshot.serviceId)}">
 							<span class="menu-icon">⚠️</span>
 							Report Outage
 						</button>
@@ -303,21 +370,21 @@ namespace DashboardApp {
 				</div>
 			</div>
 			<div class="card-body">
-				${renderMetricSection(data)}
-				${renderOutageIndicator(data.serviceName)}
-				${hasQuotaWindows(data) ? '' : `<div class="card-details"><div class="detail-row"><span class="detail-label">Resets in</span><span class="detail-value reset-time" data-reset-time="${data.resetTime || ''}" data-reset-prefix="" data-reset-text="${data.resetText || ''}">${formatResetDisplay(data.resetTime, data.resetText)}</span></div></div>`}
+				${body}
 			</div>
-			${hasModels ? `<div class="card-models ${state.expandedCards[data.serviceName] ? 'expanded' : ''}">${renderModelRows(data.models)}</div><button class="card-expand-btn ${state.expandedCards[data.serviceName] ? 'expanded' : ''}" data-service="${escapeHtml(data.serviceName)}"><span class="chevron">&#9660;</span><span class="expand-label">${state.expandedCards[data.serviceName] ? 'Hide' : 'Show'} ${data.models!.length} model${data.models!.length !== 1 ? 's' : ''}</span></button>` : ''}
+			${hasModels && usage ? `<div class="card-models ${state.expandedCards[snapshot.serviceName] ? 'expanded' : ''}">${renderModelRows(usage.models)}</div><button class="card-expand-btn ${state.expandedCards[snapshot.serviceName] ? 'expanded' : ''}" data-service="${escapeHtml(snapshot.serviceName)}"><span class="chevron">&#9660;</span><span class="expand-label">${state.expandedCards[snapshot.serviceName] ? 'Hide' : 'Show'} ${usage.models!.length} model${usage.models!.length !== 1 ? 's' : ''}</span></button>` : ''}
 		`;
 
-		const offset = CIRCUMFERENCE - (data.displayPercent / 100) * CIRCUMFERENCE;
-		requestAnimationFrame(() => requestAnimationFrame(() => {
-			const ring = card.querySelector<SVGCircleElement>('.progress-ring-fill');
-			if (ring) ring.style.strokeDashoffset = String(offset);
-		}));
+		if (usage) {
+			const offset = CIRCUMFERENCE - (usage.displayPercent / 100) * CIRCUMFERENCE;
+			requestAnimationFrame(() => requestAnimationFrame(() => {
+				const ring = card.querySelector<SVGCircleElement>('.progress-ring-fill');
+				if (ring) ring.style.strokeDashoffset = String(offset);
+			}));
+		}
 
 		const expandButton = card.querySelector<HTMLButtonElement>('.card-expand-btn');
-		if (expandButton && data.models) {
+		if (expandButton && usage?.models) {
 			expandButton.addEventListener('click', () => {
 				const models = card.querySelector<HTMLElement>('.card-models');
 				if (!models) return;
@@ -325,10 +392,10 @@ namespace DashboardApp {
 				expandButton.classList.toggle('expanded', expanded);
 				const label = expandButton.querySelector<HTMLElement>('.expand-label');
 				if (label) {
-					const count = data.models?.length ?? 0;
+					const count = usage.models?.length ?? 0;
 					label.textContent = `${expanded ? 'Hide' : 'Show'} ${count} model${count !== 1 ? 's' : ''}`;
 				}
-				state.expandedCards[data.serviceName] = expanded;
+				state.expandedCards[snapshot.serviceName] = expanded;
 				persistState();
 			});
 		}
@@ -336,16 +403,16 @@ namespace DashboardApp {
 		// Dropdown menu logic
 		const menuBtn = card.querySelector<HTMLButtonElement>('.card-menu-btn');
 		const dropdown = card.querySelector<HTMLElement>('.card-dropdown-menu');
-		
+
 		if (menuBtn && dropdown) {
 			menuBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
 				const isExpanded = menuBtn.getAttribute('aria-expanded') === 'true';
-				
+
 				// Close all other menus first
 				document.querySelectorAll('.card-menu-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
 				document.querySelectorAll('.card-dropdown-menu').forEach(menu => menu.classList.remove('show'));
-				
+
 				if (!isExpanded) {
 					menuBtn.setAttribute('aria-expanded', 'true');
 					dropdown.classList.add('show');
@@ -354,17 +421,17 @@ namespace DashboardApp {
 		}
 
 		card.querySelector<HTMLButtonElement>('.menu-item.hide-btn')?.addEventListener('click', () => {
-			vscode.postMessage({ type: 'toggleHideService', service: data.serviceName });
+			vscode.postMessage({ type: 'toggleHideService', service: snapshot.serviceName });
 			dropdown?.classList.remove('show');
 			menuBtn?.setAttribute('aria-expanded', 'false');
 		});
-		
+
 		card.querySelector<HTMLButtonElement>('.menu-item.report-btn')?.addEventListener('click', () => {
-			vscode.postMessage({ type: 'reportOutage', serviceId: data.serviceId });
+			vscode.postMessage({ type: 'reportOutage', serviceId: snapshot.serviceId });
 			dropdown?.classList.remove('show');
 			menuBtn?.setAttribute('aria-expanded', 'false');
 		});
-		
+
 		const indicator = card.querySelector<HTMLElement>('.card-outage-indicator');
 		if (indicator) {
 			indicator.addEventListener('click', () => {
@@ -380,35 +447,52 @@ namespace DashboardApp {
 		return card;
 	}
 
-	function updateServiceCard(data: SerializedUsageData): void {
-		const card = document.querySelector<HTMLElement>(`.service-card[data-service="${CSS.escape(data.serviceName)}"]`);
+	function updateServiceCard(snapshot: SerializedServiceSnapshot): void {
+		const card = document.querySelector<HTMLElement>(`.service-card[data-service="${CSS.escape(snapshot.serviceName)}"]`);
 		if (!card) return;
-		card.className = card.className.replace(/status-\w+/, `status-${data.status}`);
-		card.dataset.layout = getCardLayoutKey(data);
-		const offset = CIRCUMFERENCE - (data.displayPercent / 100) * CIRCUMFERENCE;
-		const quotaWindows = card.querySelector<HTMLElement>('.quota-windows');
-		if (quotaWindows && hasQuotaWindows(data)) {
-			quotaWindows.innerHTML = renderQuotaWindowRows(data.quotaWindows);
-		} else {
-			const ring = card.querySelector<SVGCircleElement>('.progress-ring-fill');
-			if (ring) ring.style.strokeDashoffset = String(offset);
-			const segmented = card.querySelector<HTMLElement>('.progress-ring-container.segmented');
-			if (segmented && hasSegmentedProgress(data)) segmented.outerHTML = renderMetricSection(data).trim();
-			const value = card.querySelector<HTMLElement>('.progress-value');
-			const unit = card.querySelector<HTMLElement>('.progress-unit');
-			if (value) value.textContent = data.displayValueText;
-			if (unit) unit.textContent = data.displayUnit;
+		const data = snapshot.usage;
+		const health = snapshot.health;
+		const statusClass = data ? data.status : (health ? healthStatusClass(health.kind) : 'ok');
+		card.className = card.className.replace(/status-\w+/, `status-${statusClass}`);
+		card.classList.toggle('health-only', !data);
+		card.dataset.layout = getSnapshotLayoutKey(snapshot);
+		if (data) {
+			const offset = CIRCUMFERENCE - (data.displayPercent / 100) * CIRCUMFERENCE;
+			const quotaWindows = card.querySelector<HTMLElement>('.quota-windows');
+			if (quotaWindows && hasQuotaWindows(data)) {
+				quotaWindows.innerHTML = renderQuotaWindowRows(data.quotaWindows);
+			} else {
+				const ring = card.querySelector<SVGCircleElement>('.progress-ring-fill');
+				if (ring) ring.style.strokeDashoffset = String(offset);
+				const segmented = card.querySelector<HTMLElement>('.progress-ring-container.segmented');
+				if (segmented && hasSegmentedProgress(data)) segmented.outerHTML = renderMetricSection(data).trim();
+				const value = card.querySelector<HTMLElement>('.progress-value');
+				const unit = card.querySelector<HTMLElement>('.progress-unit');
+				if (value) value.textContent = data.displayValueText;
+				if (unit) unit.textContent = data.displayUnit;
+			}
+			const reset = card.querySelector<HTMLElement>('.card-details .reset-time');
+			if (reset) {
+				reset.dataset.resetTime = data.resetTime || '';
+				reset.dataset.resetText = data.resetText || '';
+				reset.textContent = formatResetDisplay(data.resetTime, data.resetText, reset.dataset.resetPrefix || '');
+			}
+		} else if (health) {
+			const healthEl = card.querySelector<HTMLElement>('.card-health');
+			if (healthEl) {
+				healthEl.dataset.healthKind = health.kind;
+				const label = healthEl.querySelector<HTMLElement>('.card-health-label');
+				const summary = healthEl.querySelector<HTMLElement>('.card-health-summary');
+				const detail = healthEl.querySelector<HTMLElement>('.card-health-detail');
+				if (label) label.textContent = healthKindLabel(health.kind);
+				if (summary) summary.textContent = health.summary;
+				if (detail) detail.textContent = health.detail ?? '';
+			}
 		}
-		const reset = card.querySelector<HTMLElement>('.card-details .reset-time');
-		if (reset) {
-			reset.dataset.resetTime = data.resetTime || '';
-			reset.dataset.resetText = data.resetText || '';
-			reset.textContent = formatResetDisplay(data.resetTime, data.resetText, reset.dataset.resetPrefix || '');
-		}
-		
+
 		// Update outage indicator
 		let indicatorContainer = card.querySelector<HTMLElement>('.card-outage-indicator');
-		const indicatorHtml = renderOutageIndicator(data.serviceName);
+		const indicatorHtml = renderOutageIndicator(snapshot.serviceName);
 		
 		if (indicatorContainer && !indicatorHtml) {
 			// Remove existing
@@ -448,23 +532,23 @@ namespace DashboardApp {
 		}
 		
 		const models = card.querySelector<HTMLElement>('.card-models');
-		if (models && data.models) models.innerHTML = renderModelRows(data.models);
+		if (models && data?.models) models.innerHTML = renderModelRows(data.models);
 	}
 
-	function rebuildOrUpdate(container: HTMLElement, dataList: SerializedUsageData[]): void {
+	function rebuildOrUpdate(container: HTMLElement, snapshots: SerializedServiceSnapshot[]): void {
 		const existingCards = Array.from(container.querySelectorAll<HTMLElement>('.service-card'));
 		const existingLayouts = new Map(existingCards.map((card) => [card.dataset.service || '', card.dataset.layout || '']));
 		const existingNames = new Set(existingCards.map((card) => card.dataset.service || ''));
-		const newNames = new Set(dataList.map((data) => data.serviceName));
+		const newNames = new Set(snapshots.map((snapshot) => snapshot.serviceName));
 		const needsRebuild = existingNames.size !== newNames.size
 			|| [...newNames].some((name) => !existingNames.has(name))
-			|| dataList.some((data) => existingLayouts.get(data.serviceName) !== getCardLayoutKey(data));
+			|| snapshots.some((snapshot) => existingLayouts.get(snapshot.serviceName) !== getSnapshotLayoutKey(snapshot));
 		if (needsRebuild) {
 			container.innerHTML = '';
-			dataList.forEach((data, index) => container.appendChild(createServiceCard(data, index)));
+			snapshots.forEach((snapshot, index) => container.appendChild(createServiceCard(snapshot, index)));
 			return;
 		}
-		dataList.forEach(updateServiceCard);
+		snapshots.forEach(updateServiceCard);
 	}
 
 	function renderDashboard(): void {
@@ -473,7 +557,7 @@ namespace DashboardApp {
 		const hiddenSection = document.getElementById('hidden-section');
 		const emptyState = document.getElementById('empty-state');
 		if (!(container instanceof HTMLElement) || !(emptyState instanceof HTMLElement)) return;
-		if (state.usageData.length === 0) {
+		if (state.snapshots.length === 0) {
 			container.innerHTML = '';
 			if (hiddenContainer instanceof HTMLElement) hiddenContainer.innerHTML = '';
 			if (hiddenSection instanceof HTMLElement) hiddenSection.classList.add('hidden');
@@ -482,13 +566,13 @@ namespace DashboardApp {
 		}
 		emptyState.classList.add('hidden');
 		const hidden = getHiddenServices();
-		const visible = state.usageData.filter((data) => !hidden.includes(data.serviceName));
-		const hiddenData = state.usageData.filter((data) => hidden.includes(data.serviceName));
+		const visible = state.snapshots.filter((snapshot) => !hidden.includes(snapshot.serviceName));
+		const hiddenSnapshots = state.snapshots.filter((snapshot) => hidden.includes(snapshot.serviceName));
 		rebuildOrUpdate(container, visible);
 		if (hiddenContainer instanceof HTMLElement && hiddenSection instanceof HTMLElement) {
-			if (hiddenData.length > 0) {
+			if (hiddenSnapshots.length > 0) {
 				hiddenSection.classList.remove('hidden');
-				rebuildOrUpdate(hiddenContainer, hiddenData);
+				rebuildOrUpdate(hiddenContainer, hiddenSnapshots);
 			} else {
 				hiddenSection.classList.add('hidden');
 				hiddenContainer.innerHTML = '';
@@ -675,7 +759,7 @@ namespace DashboardApp {
 			const message = event.data;
 			switch (message.type) {
 				case 'usageUpdate':
-					state.usageData = message.data || [];
+					state.snapshots = message.data || [];
 					renderDashboard();
 					break;
 				case 'configUpdate':

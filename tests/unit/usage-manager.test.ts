@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UsageManager } from '../../src/managers/usage-manager';
 import { UsageProvider } from '../../src/providers/base';
-import { ServiceId, UsageData } from '../../src/types';
+import { ServiceHealth, ServiceId, UsageData } from '../../src/types';
 
 class FakeProvider extends UsageProvider {
 	readonly serviceId: ServiceId;
 	public disposeSpy?: () => void;
+	public health: ServiceHealth | null = null;
 
 	constructor(
 		serviceId: ServiceId,
 		private readonly serviceName: string,
-		private readonly usageData: UsageData,
+		private readonly usageData: UsageData | null,
 		private readonly available = true,
 		private readonly usageSpy?: () => void,
 		private readonly error?: Error
@@ -37,6 +38,10 @@ class FakeProvider extends UsageProvider {
 
 	async getModels(): Promise<string[]> {
 		return [];
+	}
+
+	getLastServiceHealth(): ServiceHealth | null {
+		return this.health;
 	}
 
 	dispose(): void {
@@ -268,5 +273,72 @@ describe('UsageManager', () => {
 		expect(manager.getAllUsageData().map(item => item.serviceName)).toEqual(['Claude Code']);
 		expect(manager.getUsageData('Codex')).toBeNull();
 		expect(manager.getUsageData('Claude Code')).not.toBeNull();
+	});
+
+	it('exposes health-only services via getServiceSnapshots when usage is null', async () => {
+		const manager = new UsageManager(createConfigManager());
+		const healthyProvider = new FakeProvider('codex', 'Codex', usageData('codex', 'Codex', 30));
+		const reauthProvider = new FakeProvider('gemini', 'Gemini CLI 2.5 Pro', null);
+		reauthProvider.health = {
+			kind: 'reauthRequired',
+			summary: 'Credentials expired',
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		};
+		manager.registerProvider(healthyProvider);
+		manager.registerProvider(reauthProvider);
+
+		await manager.refreshAll();
+
+		const snapshots = manager.getServiceSnapshots();
+		expect(snapshots.map(s => s.serviceName)).toEqual(['Codex', 'Gemini CLI 2.5 Pro']);
+		const codex = snapshots.find(s => s.serviceName === 'Codex');
+		expect(codex?.usage).toBeTruthy();
+		expect(codex?.health).toBeUndefined();
+		const gemini = snapshots.find(s => s.serviceName === 'Gemini CLI 2.5 Pro');
+		expect(gemini?.usage).toBeUndefined();
+		expect(gemini?.health?.kind).toBe('reauthRequired');
+		// getAllUsageData still only contains quota-bearing services
+		expect(manager.getAllUsageData().map(u => u.serviceName)).toEqual(['Codex']);
+	});
+
+	it('clears both usage and health caches when a service is disabled', async () => {
+		let enabled = true;
+		const configManager = {
+			getServicesConfig: () => ({
+				codex: { enabled },
+			}),
+			getPollingInterval: () => 60,
+		} as any;
+		const manager = new UsageManager(configManager);
+		const provider = new FakeProvider('codex', 'Codex', null);
+		provider.health = {
+			kind: 'reauthRequired',
+			summary: 'Reauth',
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		};
+		manager.registerProvider(provider);
+
+		await manager.refreshAll();
+		expect(manager.getServiceSnapshots()).toHaveLength(1);
+
+		enabled = false;
+		manager.clearCacheForDisabledServices();
+		expect(manager.getServiceSnapshots()).toEqual([]);
+	});
+
+	it('keeps snapshot ordering stable across refreshes', async () => {
+		const manager = new UsageManager(createConfigManager());
+		const bravo = new FakeProvider('codex', 'Bravo', null);
+		bravo.health = { kind: 'reauthRequired', summary: 'x', lastUpdated: new Date() };
+		manager.registerProvider(new FakeProvider('gemini', 'Alpha', usageData('gemini', 'Alpha', 5)));
+		manager.registerProvider(bravo);
+		manager.registerProvider(new FakeProvider('antigravity', 'Charlie', usageData('antigravity', 'Charlie', 10)));
+
+		await manager.refreshAll();
+		const first = manager.getServiceSnapshots().map(s => s.serviceName);
+		await manager.refreshAll();
+		const second = manager.getServiceSnapshots().map(s => s.serviceName);
+		expect(first).toEqual(['Alpha', 'Bravo', 'Charlie']);
+		expect(second).toEqual(first);
 	});
 });

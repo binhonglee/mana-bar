@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	buildDashboardConfigPayload,
+	serializeServiceHealth,
+	serializeServiceSnapshot,
 	serializeUsageData,
 	SerializedUsageData,
 } from '../../src/dashboard-serialization';
-import { UsageData, UsageStatus } from '../../src/types';
+import { ServiceHealth, ServiceSnapshot, UsageData, UsageStatus } from '../../src/types';
 
 function createMockUsageData(overrides?: Partial<UsageData>): UsageData {
 	return {
@@ -168,6 +170,77 @@ describe('serializeUsageData', () => {
 
 		expect(result.status).toBe(UsageStatus.OK);
 		expect(result.statusEmoji).toBe('🟢');
+	});
+});
+
+describe('serializeServiceHealth', () => {
+	it('serializes health including ISO timestamp', () => {
+		const health: ServiceHealth = {
+			kind: 'reauthRequired',
+			summary: 'Credentials expired',
+			detail: 'Sign in again',
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		};
+
+		const result = serializeServiceHealth(health);
+
+		expect(result).toEqual({
+			kind: 'reauthRequired',
+			summary: 'Credentials expired',
+			detail: 'Sign in again',
+			lastUpdated: '2026-03-10T10:00:00.000Z',
+		});
+	});
+});
+
+describe('serializeServiceSnapshot', () => {
+	it('serializes usage-only snapshot', () => {
+		const snapshot: ServiceSnapshot = {
+			serviceId: 'codex',
+			serviceName: 'Codex',
+			usage: createMockUsageData(),
+		};
+
+		const result = serializeServiceSnapshot(snapshot, 'used');
+		expect(result.serviceName).toBe('Codex');
+		expect(result.usage).toBeDefined();
+		expect(result.usage!.totalUsed).toBe(50);
+		expect(result.health).toBeUndefined();
+	});
+
+	it('serializes health-only snapshot and omits usage metric payload', () => {
+		const snapshot: ServiceSnapshot = {
+			serviceId: 'kiro',
+			serviceName: 'Kiro',
+			health: {
+				kind: 'reauthRequired',
+				summary: 'Kiro credentials expired',
+				lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+			},
+		};
+
+		const result = serializeServiceSnapshot(snapshot, 'used');
+		expect(result.serviceName).toBe('Kiro');
+		expect(result.usage).toBeUndefined();
+		expect(result.health?.kind).toBe('reauthRequired');
+		expect(result.health?.summary).toBe('Kiro credentials expired');
+	});
+
+	it('serializes combined usage + health snapshot', () => {
+		const snapshot: ServiceSnapshot = {
+			serviceId: 'codex',
+			serviceName: 'Codex',
+			usage: createMockUsageData(),
+			health: {
+				kind: 'rateLimited',
+				summary: 'Rate limited',
+				lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+			},
+		};
+
+		const result = serializeServiceSnapshot(snapshot, 'remaining');
+		expect(result.usage).toBeDefined();
+		expect(result.health?.kind).toBe('rateLimited');
 	});
 });
 

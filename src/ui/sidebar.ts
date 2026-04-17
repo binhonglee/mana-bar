@@ -1,9 +1,18 @@
 import * as vscode from 'vscode';
 import { UsageManager } from '../managers/usage-manager';
 import { ConfigManager } from '../managers/config-manager';
-import { UsageStatus } from '../types';
+import { ServiceHealthKind, UsageStatus } from '../types';
 import { toServiceViewModel } from '../usage-display';
 import { OutageClient } from '../outage/outage-client';
+
+function healthKindLabel(kind: ServiceHealthKind): string {
+	switch (kind) {
+		case 'reauthRequired': return 'Reauth needed';
+		case 'rateLimited': return 'Rate limited';
+		case 'unavailable': return 'Unavailable';
+		default: return 'Unknown';
+	}
+}
 
 /**
  * Tree item for the sidebar
@@ -83,10 +92,10 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 	private getServices(): UsageTreeItem[] {
 		const displayMode = this.configManager?.getDisplayMode() ?? 'remaining';
 		const hidden = this.configManager?.getHiddenServices() ?? [];
-		const allUsage = this.usageManager.getAllUsageData()
-			.filter(u => !hidden.includes(u.serviceName));
+		const snapshots = this.usageManager.getServiceSnapshots()
+			.filter(s => !hidden.includes(s.serviceName));
 
-		if (allUsage.length === 0) {
+		if (snapshots.length === 0) {
 			const item = new UsageTreeItem(
 				'No services configured',
 				undefined,
@@ -96,15 +105,31 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 			return [item];
 		}
 
-		return allUsage.map(usage => {
-			const viewModel = toServiceViewModel(usage, displayMode);
-			let icon = viewModel.status === UsageStatus.CRITICAL ? 'error' :
-				viewModel.status === UsageStatus.WARNING ? 'warning' : 'pass';
-				
+		return snapshots.map(snapshot => {
+			const { usage, health } = snapshot;
+			let icon: string;
+			let label: string;
+			let description: string;
+			let collapsibleState: vscode.TreeItemCollapsibleState;
+
+			if (usage) {
+				const viewModel = toServiceViewModel(usage, displayMode);
+				icon = viewModel.status === UsageStatus.CRITICAL ? 'error' :
+					viewModel.status === UsageStatus.WARNING ? 'warning' : 'pass';
+				label = viewModel.serviceName;
+				description = viewModel.displayText;
+				collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+			} else {
+				icon = health?.kind === 'unavailable' ? 'error' : 'warning';
+				label = snapshot.serviceName;
+				description = health ? healthKindLabel(health.kind) : '';
+				collapsibleState = health ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None;
+			}
+
 			// Check for outages
 			if (this.outageClient) {
 				const hasOutage = this.outageClient.getCachedData()?.reports.some(
-					r => r.service.toLowerCase() === usage.serviceName.toLowerCase()
+					r => r.service.toLowerCase() === snapshot.serviceName.toLowerCase()
 				);
 				if (hasOutage) {
 					icon = 'alert';
@@ -112,15 +137,15 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 			}
 
 			const item = new UsageTreeItem(
-				viewModel.serviceName,
-				viewModel.displayText,
-				vscode.TreeItemCollapsibleState.Expanded,
+				label,
+				description,
+				collapsibleState,
 				new vscode.ThemeIcon(icon),
-				`service:${viewModel.serviceName}`
+				`service:${snapshot.serviceName}`
 			);
 
 			// Store service name for getting children
-			(item as any).serviceName = viewModel.serviceName;
+			(item as any).serviceName = snapshot.serviceName;
 
 			return item;
 		});
@@ -130,14 +155,38 @@ export class SidebarProvider implements vscode.TreeDataProvider<UsageTreeItem> {
 	 * Get details for a specific service
 	 */
 	private getServiceDetails(serviceName: string): UsageTreeItem[] {
-		const usage = this.usageManager.getAllUsageData()
-			.find(u => u.serviceName === serviceName);
+		const snapshot = this.usageManager.getServiceSnapshots()
+			.find(s => s.serviceName === serviceName);
 
-		if (!usage) {
+		if (!snapshot) {
 			return [];
 		}
 
 		const items: UsageTreeItem[] = [];
+
+		// Health-only snapshot: show health summary/detail as children
+		if (!snapshot.usage && snapshot.health) {
+			items.push(new UsageTreeItem(
+				snapshot.health.summary,
+				undefined,
+				vscode.TreeItemCollapsibleState.None,
+				new vscode.ThemeIcon('info')
+			));
+			if (snapshot.health.detail) {
+				items.push(new UsageTreeItem(
+					snapshot.health.detail,
+					undefined,
+					vscode.TreeItemCollapsibleState.None,
+					new vscode.ThemeIcon('note')
+				));
+			}
+			return items;
+		}
+
+		const usage = snapshot.usage;
+		if (!usage) {
+			return items;
+		}
 
 		// Reset time item
 		if (usage.resetTime) {

@@ -9,7 +9,16 @@ describe('UI Extra Coverage', () => {
 	const mockUsageManager = {
 		onDidUpdateUsage: vi.fn(() => ({ dispose: vi.fn() })),
 		getAllUsageData: vi.fn(() => []),
+		getServiceSnapshots: vi.fn(() => []),
 	} as any;
+
+	function snapshotsFromUsage(usages: any[]) {
+		return usages.map((u) => ({
+			serviceId: u.serviceId,
+			serviceName: u.serviceName,
+			usage: u,
+		}));
+	}
 
 	const mockConfigManager = {
 		onConfigChange: vi.fn(() => ({ dispose: vi.fn() })),
@@ -30,9 +39,10 @@ describe('UI Extra Coverage', () => {
 
 		it('covers getServiceDetails when usage is missing', () => {
 			const provider = new SidebarProvider(mockUsageManager, mockConfigManager);
-			// We need to pass an element that has a serviceName but is not in getAllUsageData
+			// We need to pass an element that has a serviceName but is not in getServiceSnapshots
 			const element = { serviceName: 'Missing' };
 			mockUsageManager.getAllUsageData.mockReturnValue([]);
+			mockUsageManager.getServiceSnapshots.mockReturnValue([]);
 			expect(provider.getChildren(element as any)).toEqual([]);
 		});
 
@@ -45,29 +55,35 @@ describe('UI Extra Coverage', () => {
 
 	describe('StatusBarController', () => {
 		it('covers totalLimit === 0 case in update', () => {
-			mockUsageManager.getAllUsageData.mockReturnValue([
+			const usages = [
 				{ serviceId: 'codex', serviceName: 'Test', totalUsed: 0, totalLimit: 0, lastUpdated: new Date() }
-			]);
+			];
+			mockUsageManager.getAllUsageData.mockReturnValue(usages);
+			mockUsageManager.getServiceSnapshots.mockReturnValue(snapshotsFromUsage(usages));
 			const controller = new StatusBarController(mockUsageManager, mockConfigManager);
 			// Update is called in constructor
 			// How to verify statusBarItem.text? We need to mock vscode.window.createStatusBarItem
 		});
 
 		it('covers buildTooltipRegular without resetTime', () => {
-			mockUsageManager.getAllUsageData.mockReturnValue([
+			const usages = [
 				{ serviceId: 'codex', serviceName: 'Test', totalUsed: 10, totalLimit: 100, lastUpdated: new Date() }
-			]);
+			];
+			mockUsageManager.getAllUsageData.mockReturnValue(usages);
+			mockUsageManager.getServiceSnapshots.mockReturnValue(snapshotsFromUsage(usages));
 			const controller = new StatusBarController(mockUsageManager, mockConfigManager);
 			// tooltip is set in update
 		});
 
 		it('covers getStatusEmoji and buildTooltipMonospaced cases', () => {
 			mockConfigManager.getStatusBarTooltipLayout.mockReturnValue('monospaced');
-			mockUsageManager.getAllUsageData.mockReturnValue([
+			const usages = [
 				{ serviceId: 'codex', serviceName: 'Critical', totalUsed: 100, totalLimit: 100, lastUpdated: new Date() },
 				{ serviceId: 'codex', serviceName: 'Warning', totalUsed: 85, totalLimit: 100, lastUpdated: new Date() },
 				{ serviceId: 'codex', serviceName: 'OK', totalUsed: 10, totalLimit: 100, lastUpdated: new Date() },
-			]);
+			];
+			mockUsageManager.getAllUsageData.mockReturnValue(usages);
+			mockUsageManager.getServiceSnapshots.mockReturnValue(snapshotsFromUsage(usages));
 			const controller = new StatusBarController(mockUsageManager, mockConfigManager);
 		});
 

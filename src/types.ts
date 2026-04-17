@@ -25,6 +25,32 @@ export interface QuotaWindowUsage {
 }
 
 /**
+ * Non-quota health states that a provider can report alongside (or instead of) usage data.
+ * Used to keep a service visible in the UI when we know why quota data is unavailable.
+ */
+export type ServiceHealthKind = 'reauthRequired' | 'rateLimited' | 'unavailable';
+
+/**
+ * Provider-reported health state for a registered service instance.
+ */
+export interface ServiceHealth {
+	kind: ServiceHealthKind;
+	summary: string;
+	detail?: string;
+	lastUpdated: Date;
+}
+
+/**
+ * Merged view of a registered provider: quota usage when available, and/or health state.
+ */
+export interface ServiceSnapshot {
+	serviceId: ServiceId;
+	serviceName: string;
+	usage?: UsageData;
+	health?: ServiceHealth;
+}
+
+/**
  * Complete usage data for a service
  */
 export interface UsageData {

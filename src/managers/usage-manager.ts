@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { UsageProvider } from '../providers/base';
-import { ServiceId, UsageData } from '../types';
+import { ServiceHealth, ServiceId, ServiceSnapshot, UsageData } from '../types';
 import { ConfigManager } from './config-manager';
 import { debugLog } from '../logger';
 
@@ -9,6 +9,11 @@ import { debugLog } from '../logger';
  */
 interface CacheEntry {
 	data: UsageData;
+	expiresAt: number;
+}
+
+interface HealthEntry {
+	health: ServiceHealth;
 	expiresAt: number;
 }
 
@@ -24,6 +29,7 @@ export interface RegisteredProvider {
 export class UsageManager {
 	private providers: Map<string, RegisteredProvider> = new Map();
 	private cache: Map<string, CacheEntry> = new Map();
+	private healthCache: Map<string, HealthEntry> = new Map();
 	private pollingTimer: NodeJS.Timeout | null = null;
 	private _onDidUpdateUsage = new vscode.EventEmitter<void>();
 	private readonly serviceNameCollator = new Intl.Collator(undefined, {
@@ -106,6 +112,7 @@ export class UsageManager {
 			if (!serviceConfig?.enabled) {
 				debugLog(`[UsageManager] ${serviceName} is disabled, skipping`);
 				this.cache.delete(serviceName);
+				this.healthCache.delete(serviceName);
 				continue;
 			}
 
@@ -114,6 +121,7 @@ export class UsageManager {
 			debugLog(`[UsageManager] ${serviceName} isAvailable: ${isAvailable}`);
 			if (!isAvailable) {
 				this.cache.delete(serviceName);
+				this.healthCache.delete(serviceName);
 				continue;
 			}
 
@@ -126,8 +134,10 @@ export class UsageManager {
 					} else {
 						this.cache.delete(serviceName);
 					}
+					this.updateHealthCache(serviceName, provider.getLastServiceHealth());
 				}).catch((error) => {
 					console.error(`Error fetching usage for ${serviceName}:`, error);
+					this.updateHealthCache(serviceName, provider.getLastServiceHealth());
 				})
 			);
 		}
@@ -193,6 +203,77 @@ export class UsageManager {
 	}
 
 	/**
+	 * Store or clear provider-reported health for a service.
+	 * Null clears any previous entry (e.g. after a successful refresh).
+	 */
+	private updateHealthCache(serviceName: string, health: ServiceHealth | null): void {
+		if (!health) {
+			this.healthCache.delete(serviceName);
+			return;
+		}
+		const ttlSeconds = this.configManager.getPollingInterval();
+		this.healthCache.set(serviceName, {
+			health,
+			expiresAt: Date.now() + ttlSeconds * 1000,
+		});
+	}
+
+	private getLiveHealth(serviceName: string): ServiceHealth | null {
+		const entry = this.healthCache.get(serviceName);
+		if (!entry) {
+			return null;
+		}
+		if (Date.now() > entry.expiresAt) {
+			this.healthCache.delete(serviceName);
+			return null;
+		}
+		return entry.health;
+	}
+
+	/**
+	 * Merged view of registered providers, quota usage, and health state.
+	 * A snapshot is included when either usage or health data is available.
+	 */
+	getServiceSnapshots(): ServiceSnapshot[] {
+		const snapshots: ServiceSnapshot[] = [];
+		const seenAccountKeys = new Set<string>();
+
+		for (const [serviceName, registered] of this.providers) {
+			const usageEntry = this.cache.get(serviceName);
+			const usage = usageEntry && Date.now() <= usageEntry.expiresAt ? usageEntry.data : undefined;
+			const health = this.getLiveHealth(serviceName);
+
+			if (!usage && !health) {
+				continue;
+			}
+
+			let effectiveName = serviceName;
+			if (usage?.accountKey) {
+				if (seenAccountKeys.has(usage.accountKey)) {
+					continue;
+				}
+				seenAccountKeys.add(usage.accountKey);
+				if (usage.accountKeyLabel) {
+					effectiveName = usage.accountKeyLabel;
+				}
+			}
+
+			snapshots.push({
+				serviceId: registered.serviceId,
+				serviceName: effectiveName,
+				usage: usage
+					? (usage.accountKeyLabel && usage.accountKeyLabel !== usage.serviceName
+						? { ...usage, serviceName: effectiveName }
+						: usage)
+					: undefined,
+				health: health ?? undefined,
+			});
+		}
+
+		return snapshots.sort((a, b) => this.serviceNameCollator.compare(a.serviceName, b.serviceName));
+	}
+
+	/**
 	 * Map service name to config key
 	 */
 	/**
@@ -207,6 +288,7 @@ export class UsageManager {
 			if (!serviceConfig?.enabled) {
 				debugLog(`[UsageManager] Clearing cache for disabled service: ${serviceName}`);
 				this.cache.delete(serviceName);
+				this.healthCache.delete(serviceName);
 			}
 		}
 	}
