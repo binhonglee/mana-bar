@@ -212,6 +212,37 @@ describe('discoverKiroProviders', () => {
 		expect(registered[0].name).toBe('Kiro');
 	});
 
+	it('prefers the IDE token when CLI token is expired but IDE token is valid (same account)', async () => {
+		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
+		const fetch = vi.fn(async () => new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 }));
+
+		const expiredCliToken = JSON.stringify({
+			access_token: 'cli-expired-token',
+			profile_arn: 'arn:aws:codewhisperer:us-east-1:123456789:profile/TESTPROFILE',
+			expires_at: Math.floor(Date.parse('2026-04-11T00:00:00.000Z') / 1000), // expired
+		});
+		const validIdeToken = JSON.stringify({
+			accessToken: 'ide-valid-token',
+			profileArn: 'arn:aws:codewhisperer:us-east-1:123456789:profile/TESTPROFILE',
+			expiresAt: '2026-04-13T00:00:00.000Z', // valid
+		});
+		const exec = makeExec(expiredCliToken, validIdeToken);
+		const providers: KiroProvider[] = [];
+
+		await discoverKiroProviders(
+			(p) => providers.push(p as KiroProvider),
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, now: clock.now, fetch }
+		);
+
+		expect(providers).toHaveLength(1);
+		const result = await providers[0].getUsage();
+		expect(result).not.toBeNull();
+		expect(fetch).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer ide-valid-token' }) })
+		);
+	});
+
 	it('registers two providers labeled "Kiro CLI" and "Kiro IDE" when accounts differ', async () => {
 		const exec = makeExec(TOKEN_JSON, IDE_CREDS_DIFFERENT_JSON);
 		const registered: Array<{ name: string }> = [];

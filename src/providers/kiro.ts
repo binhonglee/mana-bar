@@ -177,7 +177,6 @@ export async function discoverKiroProviders(
 	const platform = deps.platform ?? process.platform;
 	const env = deps.env ?? process.env;
 
-	const seen = new Set<string>();
 	const found: Array<{ token: KiroToken; source: string }> = [];
 
 	// Source 1: kiro-cli SQLite DB
@@ -224,12 +223,31 @@ export async function discoverKiroProviders(
 	const uniqueArns = new Set(found.map(f => f.token.profile_arn ?? f.token.access_token.slice(0, 20)));
 	const multipleAccounts = uniqueArns.size > 1;
 
-	for (const { token, source } of found) {
-		const key = token.profile_arn ?? token.access_token.slice(0, 20);
-		if (seen.has(key)) continue;
-		seen.add(key);
-		const label = multipleAccounts ? `Kiro ${source}` : 'Kiro';
-		registerCallback(new KiroProvider(token, label, deps));
+	// Group by account key; when multiple sources share the same account, pick the
+	// freshest token so a valid IDE token wins over an expired CLI token (or vice versa).
+	const byKey = new Map<string, Array<{ token: KiroToken; source: string }>>();
+	for (const entry of found) {
+		const key = entry.token.profile_arn ?? entry.token.access_token.slice(0, 20);
+		const group = byKey.get(key) ?? [];
+		group.push(entry);
+		byKey.set(key, group);
+	}
+
+	const now = (deps.now ?? Date.now)();
+	for (const [, group] of byKey) {
+		// Sort: non-expired tokens first, then by latest expiry
+		group.sort((a, b) => {
+			const aExp = a.token.expires_at_ms ?? Infinity;
+			const bExp = b.token.expires_at_ms ?? Infinity;
+			const aExpired = aExp !== Infinity && now >= aExp;
+			const bExpired = bExp !== Infinity && now >= bExp;
+			if (aExpired !== bExpired) return aExpired ? 1 : -1;
+			return bExp - aExp;
+		});
+
+		const best = group[0];
+		const label = multipleAccounts ? `Kiro ${best.source}` : 'Kiro';
+		registerCallback(new KiroProvider(best.token, label, deps));
 	}
 }
 

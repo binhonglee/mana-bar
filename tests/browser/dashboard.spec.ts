@@ -1,9 +1,9 @@
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { expect, test } from '@playwright/test';
-import { serializeUsageData } from '../../src/dashboard-serialization';
+import { serializeServiceSnapshot, serializeUsageData } from '../../src/dashboard-serialization';
 import { getServiceDescriptors } from '../../src/services';
-import { UsageData } from '../../src/types';
+import { ServiceSnapshot, UsageData } from '../../src/types';
 
 const HARNESS_HTML = path.resolve(__dirname, 'harness/index.html');
 
@@ -71,8 +71,14 @@ function serializeUsageSet(
 	displayMode: 'used' | 'remaining',
 	nextUsageData: UsageData[] = rawUsageData
 ) {
-	return nextUsageData.map((item) => serializeUsageData(item, displayMode));
+	return nextUsageData.map((item) => serializeServiceSnapshot(
+		{ serviceId: item.serviceId, serviceName: item.serviceName, usage: item },
+		displayMode
+	));
 }
+
+// Kept for tests that still reference the raw usage-data serializer shape directly.
+void serializeUsageData;
 
 async function loadHarness(page: import('@playwright/test').Page) {
 	await page.goto(pathToFileURL(HARNESS_HTML).href);
@@ -596,4 +602,121 @@ test('renders Cursor-like quota windows with Spend and percentage buckets', asyn
 	await expect(values.nth(0)).toHaveText('3/20');
 	await expect(values.nth(1)).toHaveText('42%');
 	await expect(values.nth(2)).toHaveText('15%');
+});
+
+function serializeSnapshotSet(
+	displayMode: 'used' | 'remaining',
+	snapshots: ServiceSnapshot[]
+) {
+	return snapshots.map((snapshot) => serializeServiceSnapshot(snapshot, displayMode));
+}
+
+test('renders a health-only service card with reauth state and no usage metrics', async ({ page }) => {
+	await loadHarness(page);
+
+	const snapshots: ServiceSnapshot[] = [
+		{
+			serviceId: 'kiro',
+			serviceName: 'Kiro',
+			health: {
+				kind: 'reauthRequired',
+				summary: 'Kiro credentials expired',
+				detail: 'Run `kiro login` to refresh the token.',
+				lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+			},
+		},
+	];
+
+	await page.evaluate(([nextConfig, nextSnapshots]) => {
+		window.__dashboardHarness.dispatchConfigUpdate(nextConfig);
+		window.__dashboardHarness.dispatchUsageUpdate(nextSnapshots);
+	}, [config, serializeSnapshotSet(config.displayMode as 'used' | 'remaining', snapshots)]);
+
+	const card = page.locator('.service-card[data-service="Kiro"]');
+	await expect(card).toHaveCount(1);
+	await expect(card).toHaveClass(/health-only/);
+	await expect(card).toHaveClass(/status-warning/);
+	await expect(card.locator('.progress-value')).toHaveCount(0);
+	await expect(card.locator('.quota-window')).toHaveCount(0);
+
+	const healthBlock = card.locator('.card-health');
+	await expect(healthBlock).toHaveAttribute('data-health-kind', 'reauthRequired');
+	await expect(healthBlock.locator('.card-health-label')).toHaveText('Reauth needed');
+	await expect(healthBlock.locator('.card-health-summary')).toHaveText('Kiro credentials expired');
+	await expect(healthBlock.locator('.card-health-detail')).toHaveText('Run `kiro login` to refresh the token.');
+});
+
+test('rebuilds a service card when it transitions from usage to health-only', async ({ page }) => {
+	await loadHarness(page);
+
+	const usageSnapshot: ServiceSnapshot = {
+		serviceId: 'kiro',
+		serviceName: 'Kiro',
+		usage: {
+			serviceId: 'kiro',
+			serviceName: 'Kiro',
+			totalUsed: 120,
+			totalLimit: 200,
+			resetTime: new Date('2026-03-10T12:00:00.000Z'),
+			models: [],
+			lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+		},
+	};
+
+	await page.evaluate(([nextConfig, nextSnapshots]) => {
+		window.__dashboardHarness.dispatchConfigUpdate(nextConfig);
+		window.__dashboardHarness.dispatchUsageUpdate(nextSnapshots);
+	}, [config, serializeSnapshotSet('used', [usageSnapshot])]);
+
+	const card = page.locator('.service-card[data-service="Kiro"]');
+	await expect(card).toHaveCount(1);
+	await expect(card).not.toHaveClass(/health-only/);
+	await expect(card.locator('.progress-value')).toHaveText('120');
+
+	const healthSnapshot: ServiceSnapshot = {
+		serviceId: 'kiro',
+		serviceName: 'Kiro',
+		health: {
+			kind: 'reauthRequired',
+			summary: 'Kiro credentials expired',
+			lastUpdated: new Date('2026-03-10T10:05:00.000Z'),
+		},
+	};
+
+	await page.evaluate((nextSnapshots) => {
+		window.__dashboardHarness.dispatchUsageUpdate(nextSnapshots);
+	}, serializeSnapshotSet('used', [healthSnapshot]));
+
+	await expect(card).toHaveClass(/health-only/);
+	await expect(card.locator('.progress-value')).toHaveCount(0);
+	await expect(card.locator('.card-health-label')).toHaveText('Reauth needed');
+	await expect(card.locator('.card-health-summary')).toHaveText('Kiro credentials expired');
+	await expect(card.locator('.card-health-detail')).toHaveCount(0);
+});
+
+test('renders an unavailable health-only card with critical status', async ({ page }) => {
+	await loadHarness(page);
+
+	const snapshots: ServiceSnapshot[] = [
+		{
+			serviceId: 'kiro',
+			serviceName: 'Kiro',
+			health: {
+				kind: 'unavailable',
+				summary: 'Kiro API is unreachable',
+				lastUpdated: new Date('2026-03-10T10:00:00.000Z'),
+			},
+		},
+	];
+
+	await page.evaluate(([nextConfig, nextSnapshots]) => {
+		window.__dashboardHarness.dispatchConfigUpdate(nextConfig);
+		window.__dashboardHarness.dispatchUsageUpdate(nextSnapshots);
+	}, [config, serializeSnapshotSet('used', snapshots)]);
+
+	const card = page.locator('.service-card[data-service="Kiro"]');
+	await expect(card).toHaveClass(/health-only/);
+	await expect(card).toHaveClass(/status-critical/);
+	await expect(card.locator('.card-health').first()).toHaveAttribute('data-health-kind', 'unavailable');
+	await expect(card.locator('.card-health-label')).toHaveText('Unavailable');
 });
