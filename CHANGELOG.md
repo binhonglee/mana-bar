@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.5] - 2026-04-19
+### Added
+- **Service health snapshots** — The dashboard, sidebar, and status bar now display per-service health state captured at each usage poll. Health history is serialized with the dashboard so state is preserved across reloads.
+- **Kiro expired-credential detection** — When Kiro credentials have expired, the provider now surfaces a `reauth-needed` health status instead of silently failing, making it clear the user needs to re-authenticate.
+- **Kiro token freshness** — When the Kiro CLI and IDE share the same account, the provider now prefers whichever token is most recently issued, avoiding stale-token errors.
+
 ## [0.0.4] - 2026-04-13
 ### Added
 - **Kiro provider** — Tracks Kiro usage via CLI SQLite DB or IDE auth token, querying the CodeWhisperer usage API for credit consumption and plan limits.
