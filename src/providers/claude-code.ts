@@ -1,5 +1,5 @@
 import { UsageProvider } from './base';
-import { UsageData } from '../types';
+import { ServiceHealth, UsageData } from '../types';
 import { fileExists, readJsonFile, joinPath, getHomeDir } from '../utils';
 import * as https from 'https';
 import { exec } from 'child_process';
@@ -86,6 +86,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 
 	private cachedData: UsageData | null = null;
 	private cacheExpiry: number = 0;
+	private lastHealth: ServiceHealth | null = null;
 
 	constructor(deps: ClaudeCodeProviderDeps = {}) {
 		super();
@@ -138,6 +139,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 			const usageData = await this.fetchUsageFromAPI(token);
 			debugLog('[ClaudeCode] Fetched usage data:', usageData);
 			if (usageData) {
+				this.lastHealth = null;
 				this.cachedData = usageData;
 				this.cacheExpiry = getCacheExpiry(this.deps.now(), this.CACHE_TTL);
 			}
@@ -146,6 +148,10 @@ export class ClaudeCodeProvider extends UsageProvider {
 		}, this.cachedData, (error) => {
 			console.error('[ClaudeCode] Failed to fetch usage:', error);
 		});
+	}
+
+	override getLastServiceHealth(): ServiceHealth | null {
+		return this.lastHealth;
 	}
 
 	async getModels(): Promise<string[]> {
@@ -201,7 +207,14 @@ export class ClaudeCodeProvider extends UsageProvider {
 		}
 
 		if (response.statusCode === 429) {
-			// Rate limited - return cached data
+			// Rate limited - surface health state, impose a hard cooldown, and return cached data
+			this.lastHealth = {
+				kind: 'rateLimited',
+				summary: 'Claude Code is rate limited.',
+				detail: 'The Anthropic API has temporarily limited requests. Usage data may be stale.',
+				lastUpdated: new Date(this.deps.now()),
+			};
+			this.cacheExpiry = getCacheExpiry(this.deps.now(), 120 * 1000);
 			return this.cachedData;
 		}
 
