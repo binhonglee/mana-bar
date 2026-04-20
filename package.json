@@ -174,7 +174,7 @@
     "@types/vscode": "1.93.0",
     "@vitest/coverage-v8": "4.1.4",
     "@vscode/test-electron": "2.5.2",
-    "@vscode/vsce": "3.7.1",
+    "@vscode/vsce": "3.9.1",
     "tsx": "4.21.0",
     "typescript": "6.0.2",
     "vitest": "4.1.4"
