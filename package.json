@@ -176,7 +176,7 @@
     "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "3.9.1",
     "tsx": "4.21.0",
-    "typescript": "6.0.2",
+    "typescript": "6.0.3",
     "vitest": "4.1.4"
   }
 }
