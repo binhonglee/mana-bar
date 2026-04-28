@@ -140,7 +140,13 @@ export class UsageManager {
 					this.updateHealthCache(serviceName, provider.getLastServiceHealth());
 				}).catch((error) => {
 					console.error(`Error fetching usage for ${serviceName}:`, error);
-					this.updateHealthCache(serviceName, provider.getLastServiceHealth());
+					const health = provider.getLastServiceHealth() ?? {
+						kind: 'unavailable' as const,
+						summary: `${serviceName} encountered an error.`,
+						detail: error instanceof Error ? error.message : String(error),
+						lastUpdated: new Date(),
+					};
+					this.updateHealthCache(serviceName, health);
 				})
 			);
 		}

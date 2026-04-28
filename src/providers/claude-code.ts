@@ -219,10 +219,9 @@ export class ClaudeCodeProvider extends UsageProvider {
 		}
 
 		if (response.statusCode === 429) {
-			// Rate limited - surface health state, impose a hard cooldown, and return cached data
 			this.lastHealth = {
 				kind: 'rateLimited',
-				summary: 'Claude Code is rate limited.',
+				summary: 'Claude Code is rate limited (429).',
 				detail: 'The Anthropic API has temporarily limited requests. Usage data may be stale.',
 				lastUpdated: new Date(this.deps.now()),
 			};
@@ -230,7 +229,26 @@ export class ClaudeCodeProvider extends UsageProvider {
 			return this.cachedData;
 		}
 
-		throw new Error(`API returned status ${response.statusCode}`);
+		if (response.statusCode === 529) {
+			this.lastHealth = {
+				kind: 'unavailable',
+				summary: 'Claude Code is overloaded (529).',
+				detail: 'Anthropic API is temporarily overloaded. Usage data may be stale.',
+				lastUpdated: new Date(this.deps.now()),
+			};
+			this.rateLimitExpiry = getCacheExpiry(this.deps.now(), 120 * 1000);
+			return this.cachedData;
+		}
+
+		// Catchall: surface the error in the UI instead of silently swallowing it
+		this.lastHealth = {
+			kind: 'unavailable',
+			summary: `Claude Code API error (${response.statusCode ?? 'unknown'}).`,
+			detail: response.body ? response.body.substring(0, 200) : undefined,
+			lastUpdated: new Date(this.deps.now()),
+		};
+		debugLog(`[ClaudeCode] Unexpected status ${response.statusCode}: ${response.body}`);
+		return this.cachedData;
 	}
 
 	/**
