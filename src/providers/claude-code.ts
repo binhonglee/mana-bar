@@ -5,7 +5,7 @@ import * as https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AnthropicUsageResponse, parseClaudeUsageResponse } from './claude-code-parse';
-import { getCacheExpiry, getCachedValue, withStaleFallback } from './cache';
+import { getCacheExpiry, getCachedValue, hasValidCache, withStaleFallback } from './cache';
 import { debugLog } from '../logger';
 
 const execAsync = promisify(exec);
@@ -86,6 +86,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 
 	private cachedData: UsageData | null = null;
 	private cacheExpiry: number = 0;
+	private rateLimitExpiry: number = 0;
 	private lastHealth: ServiceHealth | null = null;
 
 	constructor(deps: ClaudeCodeProviderDeps = {}) {
@@ -122,6 +123,12 @@ export class ClaudeCodeProvider extends UsageProvider {
 	}
 
 	async getUsage(): Promise<UsageData | null> {
+		// Respect rate limit cooldown even on forced refresh
+		if (hasValidCache(this.rateLimitExpiry, this.deps.now())) {
+			debugLog('[ClaudeCode] Rate limited, returning cached data');
+			return this.cachedData;
+		}
+
 		const cachedData = getCachedValue(this.cachedData, this.cacheExpiry, this.deps.now());
 		if (cachedData) {
 			debugLog('[ClaudeCode] Returning cached data');
@@ -148,6 +155,11 @@ export class ClaudeCodeProvider extends UsageProvider {
 		}, this.cachedData, (error) => {
 			console.error('[ClaudeCode] Failed to fetch usage:', error);
 		});
+	}
+
+	override clearCache(): void {
+		this.cachedData = null;
+		this.cacheExpiry = 0;
 	}
 
 	override getLastServiceHealth(): ServiceHealth | null {
@@ -214,7 +226,7 @@ export class ClaudeCodeProvider extends UsageProvider {
 				detail: 'The Anthropic API has temporarily limited requests. Usage data may be stale.',
 				lastUpdated: new Date(this.deps.now()),
 			};
-			this.cacheExpiry = getCacheExpiry(this.deps.now(), 120 * 1000);
+			this.rateLimitExpiry = getCacheExpiry(this.deps.now(), 120 * 1000);
 			return this.cachedData;
 		}
 

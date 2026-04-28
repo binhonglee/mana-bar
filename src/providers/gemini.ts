@@ -191,6 +191,11 @@ export class GeminiProvider extends UsageProvider {
 		return null;
 	}
 
+	override clearCache(): void {
+		this.cachedQuotaResponse = null;
+		this.cacheExpiry = 0;
+	}
+
 	async getModels(): Promise<string[]> {
 		return this.discoveredModelIds;
 	}

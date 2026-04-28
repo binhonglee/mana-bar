@@ -96,6 +96,11 @@ export class CursorProvider extends UsageProvider {
 		});
 	}
 
+	override clearCache(): void {
+		this.cachedData = null;
+		this.cacheExpiry = 0;
+	}
+
 	async getModels(): Promise<string[]> {
 		return [];
 	}

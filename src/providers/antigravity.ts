@@ -207,11 +207,9 @@ export class AntigravityProvider extends UsageProvider {
 	 * Load account info and return a valid access token (refreshing if expired)
 	 */
 	private async getAccessToken(): Promise<string | null> {
+		this.account = this.loadAccount();
 		if (!this.account) {
-			this.account = this.loadAccount();
-			if (!this.account) {
-				return null;
-			}
+			return null;
 		}
 
 		const now = this.deps.now();

@@ -48,13 +48,16 @@ export class KiroProvider extends UsageProvider {
 	private cachedData: UsageData | null = null;
 	private cacheExpiry = 0;
 	private lastHealth: ServiceHealth | null = null;
+	private token: KiroToken;
 
 	constructor(
-		private readonly token: KiroToken,
+		token: KiroToken,
 		private readonly label: string,
+		private readonly tokenSource: { kind: 'cli'; dbPath: string } | { kind: 'ide'; filePath: string },
 		deps: KiroProviderDeps = {}
 	) {
 		super();
+		this.token = token;
 		this.deps = {
 			now: deps.now ?? Date.now,
 			fetch: deps.fetch ?? fetch,
@@ -77,16 +80,23 @@ export class KiroProvider extends UsageProvider {
 		const cached = getCachedValue(this.cachedData, this.cacheExpiry, this.deps.now());
 		if (cached) return cached;
 
-		// Fail fast on locally expired tokens: surface a reauth-required state and skip
-		// the remote call, since the CodeWhisperer endpoint will just return 401/403.
-		// We intentionally do NOT refresh tokens, since the extension is read-only and
-		// writing back would risk desyncing the user's CLI / IDE session.
-		if (this.isTokenExpired()) {
-			this.lastHealth = this.buildReauthHealth('Kiro credentials have expired.');
-			return null;
-		}
-
 		return withStaleFallback(async () => {
+			// Always re-read token from disk so reauth is picked up immediately
+			const token = await this.loadToken();
+			if (!token) {
+				return null;
+			}
+
+			// Fail fast on locally expired tokens: surface a reauth-required state and skip
+			// the remote call, since the CodeWhisperer endpoint will just return 401/403.
+			// We intentionally do NOT refresh tokens, since the extension is read-only and
+			// writing back would risk desyncing the user's CLI / IDE session.
+			if (token.expires_at_ms && this.deps.now() >= token.expires_at_ms) {
+				this.lastHealth = this.buildReauthHealth('Kiro credentials have expired.');
+				return null;
+			}
+
+			this.token = token;
 			const usageData = await this.fetchUsageLimits();
 			if (usageData) {
 				this.cachedData = usageData;
@@ -103,14 +113,47 @@ export class KiroProvider extends UsageProvider {
 		return [];
 	}
 
-	getLastServiceHealth(): ServiceHealth | null {
-		return this.lastHealth;
+	override clearCache(): void {
+		this.cachedData = null;
+		this.cacheExpiry = 0;
+		this.lastHealth = null;
 	}
 
-	private isTokenExpired(): boolean {
-		const expiresAt = this.token.expires_at_ms;
-		if (!expiresAt) return false;
-		return this.deps.now() >= expiresAt;
+	private async loadToken(): Promise<KiroToken | null> {
+		try {
+			if (this.tokenSource.kind === 'cli') {
+				const escaped = this.tokenSource.dbPath.replace(/"/g, '\\"');
+				const { stdout } = await this.deps.exec(`sqlite3 "${escaped}" "select value from auth_kv where key='kirocli:social:token' limit 1;"`);
+				const value = stdout.trim();
+				if (value) {
+					const parsed = JSON.parse(value) as { access_token?: string; profile_arn?: string; expires_at?: string | number };
+					if (parsed.access_token) {
+						return {
+							access_token: parsed.access_token,
+							profile_arn: parsed.profile_arn,
+							expires_at_ms: parseExpiresAtMs(parsed.expires_at),
+						};
+					}
+				}
+			} else {
+				const { stdout } = await this.deps.exec(`cat "${this.tokenSource.filePath}"`);
+				const parsed = JSON.parse(stdout) as { accessToken?: string; profileArn?: string; expiresAt?: string | number };
+				if (parsed.accessToken) {
+					return {
+						access_token: parsed.accessToken,
+						profile_arn: parsed.profileArn,
+						expires_at_ms: parseExpiresAtMs(parsed.expiresAt),
+					};
+				}
+			}
+		} catch {
+			// credential source unavailable
+		}
+		return null;
+	}
+
+	override getLastServiceHealth(): ServiceHealth | null {
+		return this.lastHealth;
 	}
 
 	private buildReauthHealth(summary: string, detail?: string): ServiceHealth {
@@ -177,7 +220,7 @@ export async function discoverKiroProviders(
 	const platform = deps.platform ?? process.platform;
 	const env = deps.env ?? process.env;
 
-	const found: Array<{ token: KiroToken; source: string }> = [];
+	const found: Array<{ token: KiroToken; source: string; tokenSource: { kind: 'cli'; dbPath: string } | { kind: 'ide'; filePath: string } }> = [];
 
 	// Source 1: kiro-cli SQLite DB
 	const dbPath = getDbPath(platform, homeDir, env);
@@ -196,6 +239,7 @@ export async function discoverKiroProviders(
 							expires_at_ms: parseExpiresAtMs(parsed.expires_at),
 						},
 						source: 'CLI',
+						tokenSource: { kind: 'cli', dbPath },
 					});
 				}
 			}
@@ -215,6 +259,7 @@ export async function discoverKiroProviders(
 					expires_at_ms: parseExpiresAtMs(parsed.expiresAt),
 				},
 				source: 'IDE',
+				tokenSource: { kind: 'ide', filePath: ideCredsPath },
 			});
 		}
 	} catch { /* not available */ }
@@ -225,7 +270,7 @@ export async function discoverKiroProviders(
 
 	// Group by account key; when multiple sources share the same account, pick the
 	// freshest token so a valid IDE token wins over an expired CLI token (or vice versa).
-	const byKey = new Map<string, Array<{ token: KiroToken; source: string }>>();
+	const byKey = new Map<string, Array<{ token: KiroToken; source: string; tokenSource: { kind: 'cli'; dbPath: string } | { kind: 'ide'; filePath: string } }>>();
 	for (const entry of found) {
 		const key = entry.token.profile_arn ?? entry.token.access_token.slice(0, 20);
 		const group = byKey.get(key) ?? [];
@@ -247,7 +292,7 @@ export async function discoverKiroProviders(
 
 		const best = group[0];
 		const label = multipleAccounts ? `Kiro ${best.source}` : 'Kiro';
-		registerCallback(new KiroProvider(best.token, label, deps));
+		registerCallback(new KiroProvider(best.token, label, best.tokenSource, deps));
 	}
 }
 

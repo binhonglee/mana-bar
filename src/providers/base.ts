@@ -38,6 +38,12 @@ export abstract class UsageProvider {
 	}
 
 	/**
+	 * Clear any internal cache so the next getUsage() call fetches fresh data.
+	 * Override this in providers that maintain their own cache.
+	 */
+	clearCache(): void {}
+
+	/**
 	 * Clean up resources (optional)
 	 * Override this if the provider needs to clean up processes, connections, etc.
 	 */

@@ -127,7 +127,10 @@ export class UsageManager {
 
 			// Fetch usage data
 			promises.push(
-				provider.getUsage().then((data) => {
+				(async () => {
+					provider.clearCache();
+					return provider.getUsage();
+				})().then((data) => {
 					debugLog(`[UsageManager] ${serviceName} returned data:`, data);
 					if (data) {
 						this.updateCache(serviceName, data);

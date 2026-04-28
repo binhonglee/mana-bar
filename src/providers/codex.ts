@@ -106,6 +106,11 @@ export class CodexProvider extends UsageProvider {
 		});
 	}
 
+	override clearCache(): void {
+		this.cachedData = null;
+		this.cacheExpiry = 0;
+	}
+
 	async getModels(): Promise<string[]> {
 		// Codex doesn't provide per-model breakdown in rate limits API
 		return [];
