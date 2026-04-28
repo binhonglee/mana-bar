@@ -44,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('Refreshing usage data...');
 		await usageManager?.refreshAll();
 		await outageClient.refresh();
+		usageManager?.notifyUpdate();
 		vscode.window.showInformationMessage('Usage data refreshed');
 	});
 

@@ -303,6 +303,13 @@ export class UsageManager {
 	}
 
 	/**
+	 * Manually fire the update event (e.g. after an outage refresh)
+	 */
+	notifyUpdate(): void {
+		this._onDidUpdateUsage.fire();
+	}
+
+	/**
 	 * Dispose resources
 	 */
 	dispose(): void {
