@@ -35,13 +35,32 @@ function makeExec(sqliteValue: string | null, ideCreds: string | null = null) {
 }
 
 describe('KiroProvider', () => {
+	const CLI_SOURCE = { kind: 'cli' as const, dbPath: '/fake/data.sqlite3' };
+	const IDE_SOURCE = { kind: 'ide' as const, filePath: '/fake/kiro-auth-token.json' };
+
+	function makeCliExec(token: object) {
+		return vi.fn(async (cmd: string) => {
+			if (cmd.includes('sqlite3')) return { stdout: JSON.stringify(token) };
+			return { stdout: '' };
+		});
+	}
+
+	function makeIdeExec(token: object) {
+		return vi.fn(async (cmd: string) => {
+			if (cmd.includes('kiro-auth-token.json') || cmd.includes('cat')) return { stdout: JSON.stringify(token) };
+			return { stdout: '' };
+		});
+	}
+
 	it('returns usage data from API', async () => {
 		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
 		const fetch = vi.fn(async () => new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 }));
+		const exec = makeCliExec({ access_token: 'test-access-token', profile_arn: 'arn:aws:codewhisperer:us-east-1:123456789:profile/TESTPROFILE' });
 		const provider = new KiroProvider(
 			{ access_token: 'test-access-token', profile_arn: 'arn:aws:codewhisperer:us-east-1:123456789:profile/TESTPROFILE' },
 			'Kiro',
-			{ now: clock.now, fetch }
+			CLI_SOURCE,
+			{ now: clock.now, fetch, exec }
 		);
 
 		const result = await provider.getUsage();
@@ -59,10 +78,12 @@ describe('KiroProvider', () => {
 
 	it('returns null when API returns non-ok status', async () => {
 		const fetch = vi.fn(async () => new Response('Unauthorized', { status: 401 }));
+		const exec = makeCliExec({ access_token: 'bad-token' });
 		const provider = new KiroProvider(
 			{ access_token: 'bad-token' },
 			'Kiro',
-			{ fetch }
+			CLI_SOURCE,
+			{ fetch, exec }
 		);
 
 		expect(await provider.getUsage()).toBeNull();
@@ -70,7 +91,8 @@ describe('KiroProvider', () => {
 
 	it('reports reauthRequired health when the API returns 401', async () => {
 		const fetch = vi.fn(async () => new Response('Unauthorized', { status: 401 }));
-		const provider = new KiroProvider({ access_token: 'bad-token' }, 'Kiro', { fetch });
+		const exec = makeCliExec({ access_token: 'bad-token' });
+		const provider = new KiroProvider({ access_token: 'bad-token' }, 'Kiro', CLI_SOURCE, { fetch, exec });
 
 		await provider.getUsage();
 
@@ -81,7 +103,8 @@ describe('KiroProvider', () => {
 
 	it('reports reauthRequired health when the API returns 403', async () => {
 		const fetch = vi.fn(async () => new Response('Forbidden', { status: 403 }));
-		const provider = new KiroProvider({ access_token: 'bad-token' }, 'Kiro', { fetch });
+		const exec = makeCliExec({ access_token: 'bad-token' });
+		const provider = new KiroProvider({ access_token: 'bad-token' }, 'Kiro', CLI_SOURCE, { fetch, exec });
 
 		await provider.getUsage();
 
@@ -91,13 +114,19 @@ describe('KiroProvider', () => {
 	it('skips the remote call and reports reauthRequired when local token is already expired', async () => {
 		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
 		const fetch = vi.fn();
+		const expiredToken = {
+			access_token: 'expired',
+			expires_at: Math.floor(Date.parse('2026-04-11T00:00:00.000Z') / 1000),
+		};
+		const exec = makeCliExec(expiredToken);
 		const provider = new KiroProvider(
 			{
 				access_token: 'expired',
 				expires_at_ms: Date.parse('2026-04-11T00:00:00.000Z'),
 			},
 			'Kiro',
-			{ now: clock.now, fetch }
+			CLI_SOURCE,
+			{ now: clock.now, fetch, exec }
 		);
 
 		const result = await provider.getUsage();
@@ -113,10 +142,12 @@ describe('KiroProvider', () => {
 		const fetch = vi.fn(async () => status === 200
 			? new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 })
 			: new Response('Unauthorized', { status }));
+		const exec = makeCliExec({ access_token: 'token', profile_arn: 'arn:test' });
 		const provider = new KiroProvider(
 			{ access_token: 'token', profile_arn: 'arn:test' },
 			'Kiro',
-			{ now: clock.now, fetch }
+			CLI_SOURCE,
+			{ now: clock.now, fetch, exec }
 		);
 
 		await provider.getUsage();
@@ -131,7 +162,8 @@ describe('KiroProvider', () => {
 
 	it('returns null when usageBreakdownList is empty', async () => {
 		const fetch = vi.fn(async () => new Response(JSON.stringify({ usageBreakdownList: [] }), { status: 200 }));
-		const provider = new KiroProvider({ access_token: 'token' }, 'Kiro', { fetch });
+		const exec = makeCliExec({ access_token: 'token' });
+		const provider = new KiroProvider({ access_token: 'token' }, 'Kiro', CLI_SOURCE, { fetch, exec });
 
 		expect(await provider.getUsage()).toBeNull();
 	});
@@ -139,10 +171,12 @@ describe('KiroProvider', () => {
 	it('returns stale cached data when API throws', async () => {
 		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
 		const fetch = vi.fn(async () => new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 }));
+		const exec = makeCliExec({ access_token: 'token', profile_arn: 'arn:test' });
 		const provider = new KiroProvider(
 			{ access_token: 'token', profile_arn: 'arn:test' },
 			'Kiro',
-			{ now: clock.now, fetch }
+			CLI_SOURCE,
+			{ now: clock.now, fetch, exec }
 		);
 
 		// Populate cache
@@ -159,10 +193,12 @@ describe('KiroProvider', () => {
 
 	it('uses profileArn in query string when available', async () => {
 		const fetch = vi.fn(async () => new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 }));
+		const exec = makeCliExec({ access_token: 'token', profile_arn: 'arn:aws:codewhisperer:us-east-1:123:profile/ABC' });
 		const provider = new KiroProvider(
 			{ access_token: 'token', profile_arn: 'arn:aws:codewhisperer:us-east-1:123:profile/ABC' },
 			'Kiro',
-			{ fetch }
+			CLI_SOURCE,
+			{ fetch, exec }
 		);
 
 		await provider.getUsage();
