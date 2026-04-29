@@ -175,6 +175,7 @@
     "@vitest/coverage-v8": "4.1.5",
     "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "3.9.1",
+    "fast-check": "4.7.0",
     "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vitest": "4.1.5"
