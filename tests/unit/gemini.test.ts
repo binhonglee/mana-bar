@@ -1,16 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { GeminiProvider } from '../../src/providers/gemini';
 import { FixedClock, jsonResponse } from '../support/provider-test-utils';
 
-const HOME = '/Users/test';
-const GEMINI_DIR = `${HOME}/.gemini`;
-const SETTINGS_FILE = `${GEMINI_DIR}/settings.json`;
-const CREDENTIALS_FILE = `${GEMINI_DIR}/oauth_creds.json`;
-const BINARY_PATH = '/opt/homebrew/bin/gemini';
-const PACKAGE_ROOT = '/opt/homebrew/libexec/lib/node_modules/@google/gemini-cli';
-const MODELS_FILE = `${PACKAGE_ROOT}/node_modules/@google/gemini-cli-core/dist/src/config/models.js`;
-const DEFAULT_CONFIGS_FILE = `${PACKAGE_ROOT}/node_modules/@google/gemini-cli-core/dist/src/config/defaultModelConfigs.js`;
+const HOME = path.join(path.sep, 'Users', 'test');
+const GEMINI_DIR = path.join(HOME, '.gemini');
+const SETTINGS_FILE = path.join(GEMINI_DIR, 'settings.json');
+const CREDENTIALS_FILE = path.join(GEMINI_DIR, 'oauth_creds.json');
+const BINARY_PATH = path.join(path.sep, 'opt', 'homebrew', 'bin', 'gemini');
+const PACKAGE_ROOT = path.join(path.sep, 'opt', 'homebrew', 'libexec', 'lib', 'node_modules', '@google', 'gemini-cli');
+const MODELS_FILE = path.join(PACKAGE_ROOT, 'node_modules', '@google', 'gemini-cli-core', 'dist', 'src', 'config', 'models.js');
+const DEFAULT_CONFIGS_FILE = path.join(PACKAGE_ROOT, 'node_modules', '@google', 'gemini-cli-core', 'dist', 'src', 'config', 'defaultModelConfigs.js');
+const WIN_NPM_ROOT = path.join(HOME, 'AppData', 'Roaming', 'npm');
+const WIN_GEMINI_SHIM = path.join(WIN_NPM_ROOT, 'gemini.ps1');
+const WIN_MODELS_FILE = path.join(WIN_NPM_ROOT, 'node_modules', '@google', 'gemini-cli', 'node_modules', '@google', 'gemini-cli-core', 'dist', 'src', 'config', 'models.js');
 
 function createReadJsonFile(overrides?: {
 	settings?: unknown;
@@ -250,6 +254,53 @@ describe('GeminiProvider', () => {
 			'Gemini CLI 2.5 Pro',
 			'Gemini CLI 2.5 Flash',
 		]);
+	});
+
+	it('finds Gemini CLI config under the Windows npm global layout', async () => {
+		const provider = new GeminiProvider({
+			homeDir: HOME,
+			platform: 'win32',
+			exec: async (command) => {
+				expect(command).toBe('where gemini');
+				return { stdout: `${WIN_GEMINI_SHIM}\r\n` };
+			},
+			realpath: async () => WIN_GEMINI_SHIM,
+			fileExists: createFileExists([GEMINI_DIR, WIN_MODELS_FILE]),
+			readJsonFile: createReadJsonFile({
+				credentials: {
+					access_token: 'live-token',
+					expiry_date: Date.parse('2026-03-10T20:00:00.000Z'),
+				},
+			}),
+			importModule: async () => ({
+				VALID_GEMINI_MODELS: new Set(['gemini-2.5-pro']),
+			}),
+			fetch: vi.fn(async (url: string) => {
+				if (url.endsWith(':loadCodeAssist')) {
+					return jsonResponse({
+						currentTier: { id: 'pro' },
+						cloudaicompanionProject: 'proj-123',
+					});
+				}
+				return jsonResponse({
+					buckets: [
+						{
+							modelId: 'gemini-2.5-pro',
+							tokenType: 'REQUESTS',
+							remainingFraction: 0.8,
+							resetTime: '2026-03-10T18:00:00.000Z',
+						},
+					],
+				});
+			}) as any,
+		});
+		const registered: string[] = [];
+
+		await provider.discoverQuotaGroups((usageProvider) => {
+			registered.push(usageProvider.getServiceName());
+		});
+
+		expect(registered).toEqual(['Gemini CLI 2.5 Pro']);
 	});
 
 	it('returns cached quota data when later refreshes fail', async () => {

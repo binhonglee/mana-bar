@@ -34,6 +34,24 @@ function makeExec(sqliteValue: string | null, ideCreds: string | null = null) {
 	});
 }
 
+function makeReadJsonFile(ideCreds: string | null = null) {
+	return async <T>(filePath: string): Promise<T | null> => {
+		if (filePath.includes('kiro-auth-token.json')) {
+			return ideCreds ? JSON.parse(ideCreds) as T : null;
+		}
+		return null;
+	};
+}
+
+function makeReadSqliteValue(sqliteValue: string | null = null) {
+	return vi.fn(async (dbPath: string, _query: string) => {
+		if (dbPath.includes('data.sqlite3')) {
+			return sqliteValue;
+		}
+		return null;
+	});
+}
+
 describe('KiroProvider', () => {
 	const CLI_SOURCE = { kind: 'cli' as const, dbPath: '/fake/data.sqlite3' };
 	const IDE_SOURCE = { kind: 'ide' as const, filePath: '/fake/kiro-auth-token.json' };
@@ -70,6 +88,50 @@ describe('KiroProvider', () => {
 		expect(result!.totalLimit).toBe(1000);
 		expect(result!.serviceName).toBe('Kiro');
 		expect(result!.resetTime).toEqual(new Date(1777593600 * 1000));
+		expect(fetch).toHaveBeenCalledWith(
+			expect.stringContaining('/getUsageLimits?profileArn='),
+			expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer test-access-token' }) })
+		);
+	});
+
+	it('reloads IDE token from disk without shelling out to cat', async () => {
+		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
+		const fetch = vi.fn(async () => new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 }));
+		const exec = vi.fn(async () => ({ stdout: '' }));
+		const provider = new KiroProvider(
+			{ access_token: 'stale-token', profile_arn: 'arn:aws:codewhisperer:us-east-1:123456789:profile/TESTPROFILE' },
+			'Kiro',
+			IDE_SOURCE,
+			{ now: clock.now, fetch, exec, readJsonFile: makeReadJsonFile(IDE_CREDS_JSON) }
+		);
+
+		const result = await provider.getUsage();
+
+		expect(result).not.toBeNull();
+		expect(exec).not.toHaveBeenCalledWith(expect.stringContaining('cat'));
+		expect(fetch).toHaveBeenCalledWith(
+			expect.stringContaining('/getUsageLimits?profileArn='),
+			expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer ide-access-token' }) })
+		);
+	});
+
+	it('reloads Windows CLI token from the bundled SQLite reader without shelling out to sqlite3', async () => {
+		const clock = new FixedClock(Date.parse('2026-04-12T00:00:00.000Z'));
+		const fetch = vi.fn(async () => new Response(JSON.stringify(USAGE_RESPONSE), { status: 200 }));
+		const exec = vi.fn(async () => ({ stdout: '' }));
+		const readSqliteValue = makeReadSqliteValue(TOKEN_JSON);
+		const provider = new KiroProvider(
+			{ access_token: 'stale-token', profile_arn: 'arn:aws:codewhisperer:us-east-1:123456789:profile/TESTPROFILE' },
+			'Kiro',
+			{ kind: 'cli', dbPath: 'C:\\Users\\test\\AppData\\Roaming\\kiro-cli\\data.sqlite3' },
+			{ now: clock.now, fetch, exec, platform: 'win32', readSqliteValue }
+		);
+
+		const result = await provider.getUsage();
+
+		expect(result).not.toBeNull();
+		expect(readSqliteValue).toHaveBeenCalled();
+		expect(exec).not.toHaveBeenCalledWith(expect.stringContaining('sqlite3'));
 		expect(fetch).toHaveBeenCalledWith(
 			expect.stringContaining('/getUsageLimits?profileArn='),
 			expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer test-access-token' }) })
@@ -228,11 +290,41 @@ describe('discoverKiroProviders', () => {
 
 		await discoverKiroProviders(
 			(p) => registered.push({ name: p.getServiceName() }),
-			{ exec, platform: 'darwin', homeDir: '/home/test', env: {} }
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, readJsonFile: makeReadJsonFile(IDE_CREDS_JSON) }
 		);
 
 		expect(registered).toHaveLength(1);
 		expect(registered[0].name).toBe('Kiro');
+	});
+
+	it('registers one provider labeled "Kiro" from IDE creds on Windows without cat', async () => {
+		const exec = vi.fn(async () => ({ stdout: '' }));
+		const registered: Array<{ name: string }> = [];
+
+		await discoverKiroProviders(
+			(p) => registered.push({ name: p.getServiceName() }),
+			{ exec, platform: 'win32', homeDir: 'C:\\Users\\test', env: {}, readJsonFile: makeReadJsonFile(IDE_CREDS_JSON) }
+		);
+
+		expect(registered).toHaveLength(1);
+		expect(registered[0].name).toBe('Kiro');
+		expect(exec).not.toHaveBeenCalledWith(expect.stringContaining('cat'));
+	});
+
+	it('registers one provider labeled "Kiro" from CLI creds on Windows via the bundled SQLite reader', async () => {
+		const exec = vi.fn(async () => ({ stdout: '' }));
+		const readSqliteValue = makeReadSqliteValue(TOKEN_JSON);
+		const registered: Array<{ name: string }> = [];
+
+		await discoverKiroProviders(
+			(p) => registered.push({ name: p.getServiceName() }),
+			{ exec, platform: 'win32', homeDir: 'C:\\Users\\test', env: {}, readSqliteValue }
+		);
+
+		expect(registered).toHaveLength(1);
+		expect(registered[0].name).toBe('Kiro');
+		expect(readSqliteValue).toHaveBeenCalled();
+		expect(exec).not.toHaveBeenCalledWith(expect.stringContaining('sqlite3'));
 	});
 
 	it('deduplicates when CLI and IDE share the same profile_arn', async () => {
@@ -241,7 +333,7 @@ describe('discoverKiroProviders', () => {
 
 		await discoverKiroProviders(
 			(p) => registered.push({ name: p.getServiceName() }),
-			{ exec, platform: 'darwin', homeDir: '/home/test', env: {} }
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, readJsonFile: makeReadJsonFile(IDE_CREDS_JSON) }
 		);
 
 		expect(registered).toHaveLength(1);
@@ -267,7 +359,7 @@ describe('discoverKiroProviders', () => {
 
 		await discoverKiroProviders(
 			(p) => providers.push(p as KiroProvider),
-			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, now: clock.now, fetch }
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, now: clock.now, fetch, readJsonFile: makeReadJsonFile(validIdeToken) }
 		);
 
 		expect(providers).toHaveLength(1);
@@ -285,7 +377,7 @@ describe('discoverKiroProviders', () => {
 
 		await discoverKiroProviders(
 			(p) => registered.push({ name: p.getServiceName() }),
-			{ exec, platform: 'darwin', homeDir: '/home/test', env: {} }
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, readJsonFile: makeReadJsonFile(IDE_CREDS_DIFFERENT_JSON) }
 		);
 
 		expect(registered).toHaveLength(2);
@@ -328,7 +420,7 @@ describe('discoverKiroProviders', () => {
 
 		await discoverKiroProviders(
 			(p) => providers.push(p as KiroProvider),
-			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, now: clock.now, fetch }
+			{ exec, platform: 'darwin', homeDir: '/home/test', env: {}, now: clock.now, fetch, readJsonFile: makeReadJsonFile(ideCredsJson) }
 		);
 
 		expect(providers).toHaveLength(1);

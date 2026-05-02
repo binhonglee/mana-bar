@@ -21,6 +21,7 @@ export interface CodexProviderDeps {
 	kill?: (pid: number, signal: NodeJS.Signals) => void;
 	setTimeout?: typeof setTimeout;
 	clearTimeout?: typeof clearTimeout;
+	platform?: NodeJS.Platform;
 }
 
 /**
@@ -59,6 +60,7 @@ export class CodexProvider extends UsageProvider {
 			kill: deps.kill ?? process.kill,
 			setTimeout: deps.setTimeout ?? setTimeout,
 			clearTimeout: deps.clearTimeout ?? clearTimeout,
+			platform: deps.platform ?? process.platform,
 		};
 		this.cleanupOrphanedProcess();
 	}
@@ -70,7 +72,10 @@ export class CodexProvider extends UsageProvider {
 	async isAvailable(): Promise<boolean> {
 		try {
 			// Check if codex CLI is installed
-			await this.deps.exec('which codex');
+			const { stdout } = await this.deps.exec(this.deps.platform === 'win32' ? 'where codex' : 'which codex');
+			if (!stdout.trim()) {
+				throw new Error('codex not found');
+			}
 			return true;
 		} catch {
 			return false;
@@ -124,11 +129,21 @@ export class CodexProvider extends UsageProvider {
 		if (!storedPid) return;
 
 		try {
-			// Check if process exists and is codex app-server
-			const { stdout } = await this.deps.exec(`ps -p ${storedPid} -o command=`);
-			if (stdout.includes('codex') && stdout.includes('app-server')) {
-				debugLog(`[Codex] Cleaning up orphaned codex app-server (PID ${storedPid})`);
-				this.deps.kill(storedPid, 'SIGTERM');
+			if (this.deps.platform === 'win32') {
+				const { stdout } = await this.deps.exec(
+					`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ProcessId=${storedPid}' | Select-Object -ExpandProperty CommandLine"`
+				);
+				const cmdLine = stdout.trim();
+				if (cmdLine && /codex/i.test(cmdLine) && /app-server/i.test(cmdLine)) {
+					debugLog(`[Codex] Cleaning up orphaned codex app-server (PID ${storedPid})`);
+					await this.deps.exec(`taskkill /PID ${storedPid} /T /F`);
+				}
+			} else {
+				const { stdout } = await this.deps.exec(`ps -p ${storedPid} -o command=`);
+				if (stdout.includes('codex') && stdout.includes('app-server')) {
+					debugLog(`[Codex] Cleaning up orphaned codex app-server (PID ${storedPid})`);
+					this.deps.kill(storedPid, 'SIGTERM');
+				}
 			}
 		} catch {
 			// Process doesn't exist, that's fine
@@ -141,10 +156,17 @@ export class CodexProvider extends UsageProvider {
 	 * Spawn the codex app-server subprocess
 	 */
 	private async spawnAppServer(): Promise<void> {
+		const { command, args } = await this.resolveCodexLaunch();
+
 		return new Promise((resolve, reject) => {
-			this.appServerProcess = this.deps.spawn('codex', ['app-server'], {
-				stdio: ['pipe', 'pipe', 'pipe']
-			});
+			try {
+				this.appServerProcess = this.deps.spawn(command, args, {
+					stdio: ['pipe', 'pipe', 'pipe']
+				});
+			} catch (error) {
+				reject(error);
+				return;
+			}
 
 			if (!this.appServerProcess.pid) {
 				reject(new Error('Failed to spawn codex app-server'));
@@ -170,6 +192,43 @@ export class CodexProvider extends UsageProvider {
 			// Give it a moment to start
 			this.deps.setTimeout(() => resolve(), 100);
 		});
+	}
+
+	private async resolveCodexLaunch(): Promise<{ command: string; args: string[] }> {
+		if (this.deps.platform !== 'win32') {
+			return { command: 'codex', args: ['app-server'] };
+		}
+
+		const { stdout } = await this.deps.exec('where codex');
+		const candidates = stdout
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter(Boolean);
+
+		if (candidates.length === 0) {
+			throw new Error('Codex CLI not found');
+		}
+
+		const pick = (predicate: (c: string) => boolean) => candidates.find(predicate);
+		const exe = pick((c) => /\.exe$/i.test(c));
+		if (exe) {
+			return { command: exe, args: ['app-server'] };
+		}
+
+		const cmd = pick((c) => /\.cmd$/i.test(c));
+		if (cmd) {
+			return { command: cmd, args: ['app-server'] };
+		}
+
+		const ps1 = pick((c) => /\.ps1$/i.test(c));
+		if (ps1) {
+			return {
+				command: 'powershell.exe',
+				args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1, 'app-server'],
+			};
+		}
+
+		return { command: candidates[0], args: ['app-server'] };
 	}
 
 	/**
@@ -294,8 +353,13 @@ export class CodexProvider extends UsageProvider {
 	 */
 	dispose() {
 		if (this.appServerProcess) {
-			debugLog(`[Codex] Disposing app-server (PID ${this.appServerProcess.pid})`);
-			this.appServerProcess.kill('SIGTERM');
+			const pid = this.appServerProcess.pid;
+			debugLog(`[Codex] Disposing app-server (PID ${pid})`);
+			if (this.deps.platform === 'win32' && pid !== undefined) {
+				void this.deps.exec(`taskkill /PID ${pid} /T /F`).catch(() => {});
+			} else {
+				this.appServerProcess.kill('SIGTERM');
+			}
 			this.context.globalState.update(this.PID_STORAGE_KEY, undefined);
 			this.appServerProcess = null;
 			this.isInitialized = false;

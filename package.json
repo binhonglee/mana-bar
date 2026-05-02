@@ -179,5 +179,8 @@
     "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vitest": "4.1.5"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.1"
   }
 }

@@ -352,6 +352,12 @@ export class GeminiProvider extends UsageProvider {
 		for (const prefix of prefixes) {
 			candidateRoots.add(path.join(prefix, 'libexec', 'lib', 'node_modules', '@google', 'gemini-cli'));
 			candidateRoots.add(path.join(prefix, 'lib', 'node_modules', '@google', 'gemini-cli'));
+			// Windows npm shims live under .../npm/<name>.cmd; real package is sibling node_modules/@google/gemini-cli
+			candidateRoots.add(path.join(prefix, 'node_modules', '@google', 'gemini-cli'));
+		}
+		if (this.deps.platform === 'win32') {
+			const appDataDir = this.deps.env.APPDATA ?? path.join(this.deps.homeDir, 'AppData', 'Roaming');
+			candidateRoots.add(path.join(appDataDir, 'npm', 'node_modules', '@google', 'gemini-cli'));
 		}
 
 		for (const packageRoot of candidateRoots) {
@@ -438,20 +444,45 @@ export class GeminiProvider extends UsageProvider {
 		}
 
 		this.geminiBinaryPathResolved = true;
+		const command = this.deps.platform === 'win32' ? 'where gemini' : 'which gemini';
+		const candidates: string[] = [];
 
 		try {
-			const { stdout } = await this.deps.exec('which gemini');
-			const binaryPath = stdout.trim();
-			if (!binaryPath) {
-				return null;
-			}
-
-			this.geminiBinaryPath = await this.deps.realpath(binaryPath);
-			return this.geminiBinaryPath;
+			const { stdout } = await this.deps.exec(command);
+			candidates.push(
+				...stdout
+					.split(/\r?\n/)
+					.map((line) => line.trim())
+					.filter(Boolean)
+			);
 		} catch {
-			this.geminiBinaryPath = null;
-			return null;
+			// Fall through to Windows-specific path candidates below.
 		}
+
+		if (this.deps.platform === 'win32') {
+			const appDataDir = this.deps.env.APPDATA ?? path.join(this.deps.homeDir, 'AppData', 'Roaming');
+			candidates.push(
+				path.join(appDataDir, 'npm', 'gemini.cmd'),
+				path.join(appDataDir, 'npm', 'gemini.ps1'),
+				path.join(appDataDir, 'npm', 'gemini')
+			);
+		}
+
+		for (const candidate of candidates) {
+			try {
+				this.geminiBinaryPath = await this.deps.realpath(candidate);
+				return this.geminiBinaryPath;
+			} catch {
+				if (!await this.deps.fileExists(candidate)) {
+					continue;
+				}
+				this.geminiBinaryPath = candidate;
+			}
+			return this.geminiBinaryPath;
+		}
+
+		this.geminiBinaryPath = null;
+		return null;
 	}
 
 	private async getSelectedAuthType(): Promise<string | null> {

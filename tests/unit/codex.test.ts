@@ -45,11 +45,24 @@ describe('CodexProvider', () => {
 		await expect(unavailable.isAvailable()).resolves.toBe(false);
 	});
 
+	it('checks whether the codex CLI is available on Windows', async () => {
+		const provider = new CodexProvider(createExtensionContext(), {
+			platform: 'win32',
+			exec: async (command) => {
+				expect(command).toBe('where codex');
+				return { stdout: 'C:\\Users\\binho\\AppData\\Roaming\\npm\\codex.cmd\r\n' };
+			},
+		});
+
+		await expect(provider.isAvailable()).resolves.toBe(true);
+	});
+
 	it('cleans up orphaned app-server processes from global state', async () => {
 		const globalState = new FakeGlobalState();
 		await globalState.update('codexAppServerPid', 999);
 		const kill = vi.fn();
 		new CodexProvider(createExtensionContext(globalState), {
+			platform: 'linux',
 			exec: async (command) => {
 				if (command.startsWith('ps -p 999')) {
 					return { stdout: 'codex app-server\n' };
@@ -61,6 +74,30 @@ describe('CodexProvider', () => {
 
 		await vi.waitFor(() => {
 			expect(kill).toHaveBeenCalledWith(999, 'SIGTERM');
+		});
+		expect(globalState.get('codexAppServerPid')).toBeUndefined();
+	});
+
+	it('cleans up orphaned app-server processes on Windows', async () => {
+		const globalState = new FakeGlobalState();
+		await globalState.update('codexAppServerPid', 888);
+		const exec = vi.fn(async (command: string) => {
+			if (command.includes('Get-CimInstance')) {
+				return { stdout: '"C:\\\\Program Files\\\\nodejs\\\\node.exe" codex app-server\n' };
+			}
+			if (command.startsWith('taskkill')) {
+				expect(command).toContain('888');
+				return { stdout: '' };
+			}
+			return { stdout: '' };
+		});
+		new CodexProvider(createExtensionContext(globalState), {
+			platform: 'win32',
+			exec,
+		});
+
+		await vi.waitFor(() => {
+			expect(exec).toHaveBeenCalledWith(expect.stringMatching(/taskkill.*888/));
 		});
 		expect(globalState.get('codexAppServerPid')).toBeUndefined();
 	});
@@ -93,6 +130,35 @@ describe('CodexProvider', () => {
 		expect(second).toEqual(first);
 		expect(process.stdin.write).toHaveBeenCalledTimes(3);
 		expect(globalState.get('codexAppServerPid')).toBe(1234);
+	});
+
+	it('launches codex via the Windows shim when where lists .cmd', async () => {
+		const clock = new FixedClock(Date.parse('2026-03-10T10:00:00.000Z'));
+		const process = new FakeChildProcess(1234);
+		const spawn = vi.fn(() => process as any);
+		process.stdin.write = vi.fn((chunk: string, callback?: (error?: Error | null) => void) => {
+			const payload = JSON.parse(chunk.trim());
+			if (payload.method === 'initialize') {
+				queueMicrotask(() => process.emitJson({ id: payload.id, result: {} }));
+			} else if (payload.method === 'account/rateLimits/read') {
+				queueMicrotask(() => process.emitJson({ ...RATE_LIMITS_RESPONSE, id: payload.id }));
+			}
+			callback?.(null);
+			return true;
+		});
+
+		const shim = 'C:\\Users\\binho\\AppData\\Roaming\\npm\\codex.cmd';
+		const provider = new CodexProvider(createExtensionContext(), {
+			now: clock.now,
+			platform: 'win32',
+			exec: async () => ({ stdout: `C:\\Users\\binho\\AppData\\Roaming\\npm\\codex\r\n${shim}\r\n` }),
+			spawn,
+		});
+
+		const usage = await provider.getUsage();
+
+		expect(usage?.totalUsed).toBe(72);
+		expect(spawn).toHaveBeenCalledWith(shim, ['app-server'], { stdio: ['pipe', 'pipe', 'pipe'] });
 	});
 
 	it('returns stale cached data when a later request times out', async () => {
@@ -146,6 +212,7 @@ describe('CodexProvider', () => {
 		});
 
 		const provider = new CodexProvider(createExtensionContext(globalState), {
+			platform: 'linux',
 			exec: async () => ({ stdout: '/usr/local/bin/codex\n' }),
 			spawn: () => process as any,
 		});

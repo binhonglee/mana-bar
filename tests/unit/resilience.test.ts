@@ -77,6 +77,8 @@ describe('Provider Resilience', () => {
 
 			const provider = new AntigravityProvider(mockContext, {
 				homeDir: '/test',
+				platform: 'linux',
+				exec: vi.fn(async () => ({ stdout: '[]', stderr: '' })),
 				existsSync: () => true,
 				readFileSync: (p) => {
 					if (p.includes('credentials.json')) {
@@ -105,6 +107,8 @@ describe('Provider Resilience', () => {
 
 			const provider = new AntigravityProvider(mockContext, {
 				homeDir: '/test',
+				platform: 'linux',
+				exec: vi.fn(async () => ({ stdout: '[]', stderr: '' })),
 				existsSync: (p) => p.includes('credentials.json'),
 				readFileSync: () => JSON.stringify({
 					accounts: [{ email: 't@t.com', accessToken: 'at', refreshToken: 'rt', expiresAt: Date.now() + 100000, projectId: 'p' }]

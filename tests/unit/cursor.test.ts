@@ -50,4 +50,28 @@ describe('CursorProvider', () => {
 		expect(second).toEqual(first);
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 	});
+
+	it('falls back to the bundled SQLite reader when the sqlite3 CLI is unavailable', async () => {
+		const provider = new CursorProvider({
+			platform: 'win32',
+			exec: vi.fn(async () => {
+				throw new Error('sqlite3 missing');
+			}),
+			readStateDbValue: vi.fn(async () => 'cursor-token'),
+			fetch: vi.fn(async (input: RequestInfo | URL) => {
+				const url = String(input);
+				if (url.endsWith('/aiserver.v1.DashboardService/GetCurrentPeriodUsage')) {
+					return new Response(JSON.stringify(usagePayload));
+				}
+				if (url.endsWith('/aiserver.v1.DashboardService/IsOnNewPricing')) {
+					return new Response(JSON.stringify({ hasAutoSpillover: true }));
+				}
+				return new Response('{}', { status: 404 });
+			}) as unknown as typeof fetch,
+		});
+
+		await expect(provider.isAvailable()).resolves.toBe(true);
+		const usage = await provider.getUsage();
+		expect(usage?.serviceId).toBe('cursor');
+	});
 });

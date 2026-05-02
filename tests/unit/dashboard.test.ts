@@ -87,8 +87,10 @@ describe('DashboardPanel', () => {
 		let [panel] = (vscode as any).__testing.getCreatedWebviewPanels();
 
 		expect(panel.webview.html).toContain("style-src vscode-test-csp 'unsafe-inline'");
-		expect(panel.webview.html).toContain('webview:/extension-root/media/dashboard.css');
-		expect(panel.webview.html).toContain('webview:/extension-root/media/dashboard.js');
+		// VS Code URI → string uses backslashes on Windows (`webview:\extension-root\...`)
+		const html = panel.webview.html.replace(/\\/g, '/');
+		expect(html).toContain('webview:/extension-root/media/dashboard.css');
+		expect(html).toContain('webview:/extension-root/media/dashboard.js');
 
 		DashboardPanel.createOrShow(extensionUri, usageManager as any, configManager as any, outageClient as any, outageReporter as any);
 		[panel] = (vscode as any).__testing.getCreatedWebviewPanels();

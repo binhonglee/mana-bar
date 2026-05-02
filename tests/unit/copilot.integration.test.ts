@@ -3,6 +3,28 @@ import * as vscode from 'vscode';
 import { ConfigManager } from '../../src/managers/config-manager';
 import { UsageManager } from '../../src/managers/usage-manager';
 import { registerUsageProviders } from '../../src/provider-registration';
+import { CopilotProvider } from '../../src/providers/copilot';
+
+function createTestExtensionContext(): vscode.ExtensionContext {
+	return {
+		extensionUri: vscode.Uri.file('/extension-root'),
+		subscriptions: [],
+		globalState: {
+			get: () => undefined,
+			update: async () => undefined,
+		},
+	} as unknown as vscode.ExtensionContext;
+}
+
+const registerOptions = {
+	factories: {
+		/** Skip reading the real VS Code `state.vscdb` via `sqlite3` (slow / can hang on Windows CI and dev machines). */
+		createCopilotProvider: () =>
+			new CopilotProvider({
+				readPersistedSecret: async () => null,
+			}),
+	},
+};
 
 describe('Copilot provider integration', () => {
 	let usageManager: UsageManager | undefined;
@@ -49,14 +71,7 @@ describe('Copilot provider integration', () => {
 		});
 
 		usageManager = new UsageManager(new ConfigManager());
-		await registerUsageProviders(usageManager, {
-			extensionUri: vscode.Uri.file('/extension-root'),
-			subscriptions: [],
-			globalState: {
-				get: () => undefined,
-				update: async () => undefined,
-			},
-		} as unknown as vscode.ExtensionContext);
+		await registerUsageProviders(usageManager, createTestExtensionContext(), registerOptions);
 
 		await usageManager.refreshAll();
 
@@ -66,7 +81,7 @@ describe('Copilot provider integration', () => {
 			totalUsed: 20,
 			totalLimit: 100,
 		});
-	});
+	}, 15_000);
 
 	it('surfaces usage through the auth entitlement path when a GitHub session exists', async () => {
 		(vscode as any).__testing.registerExtension({
@@ -103,14 +118,7 @@ describe('Copilot provider integration', () => {
 
 		try {
 			usageManager = new UsageManager(new ConfigManager());
-			await registerUsageProviders(usageManager, {
-				extensionUri: vscode.Uri.file('/extension-root'),
-				subscriptions: [],
-				globalState: {
-					get: () => undefined,
-					update: async () => undefined,
-				},
-			} as unknown as vscode.ExtensionContext);
+			await registerUsageProviders(usageManager, createTestExtensionContext(), registerOptions);
 
 			await usageManager.refreshAll();
 
@@ -123,5 +131,5 @@ describe('Copilot provider integration', () => {
 		} finally {
 			globalThis.fetch = originalFetch;
 		}
-	});
+	}, 15_000);
 });

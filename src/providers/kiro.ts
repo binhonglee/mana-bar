@@ -6,8 +6,11 @@ import { UsageProvider } from './base';
 import { ServiceHealth, UsageData } from '../types';
 import { getCacheExpiry, getCachedValue, withStaleFallback } from './cache';
 import { debugLog } from '../logger';
+import { readSqliteStringValue } from '../sqlite-reader';
+import { readJsonFile } from '../utils';
 
 const execAsync = promisify(exec);
+const KIRO_CLI_TOKEN_QUERY = "select value from auth_kv where key='kirocli:social:token' limit 1;";
 
 export interface KiroProviderDeps {
 	now?: () => number;
@@ -16,6 +19,8 @@ export interface KiroProviderDeps {
 	homeDir?: string;
 	platform?: NodeJS.Platform;
 	env?: NodeJS.ProcessEnv;
+	readJsonFile?: <T>(filePath: string) => Promise<T | null>;
+	readSqliteValue?: (dbPath: string, query: string) => Promise<string | null>;
 }
 
 interface KiroToken {
@@ -65,6 +70,8 @@ export class KiroProvider extends UsageProvider {
 			homeDir: deps.homeDir ?? os.homedir(),
 			platform: deps.platform ?? process.platform,
 			env: deps.env ?? process.env,
+			readJsonFile: deps.readJsonFile ?? readJsonFile,
+			readSqliteValue: deps.readSqliteValue ?? readSqliteStringValue,
 		};
 	}
 
@@ -122,23 +129,18 @@ export class KiroProvider extends UsageProvider {
 	private async loadToken(): Promise<KiroToken | null> {
 		try {
 			if (this.tokenSource.kind === 'cli') {
-				const escaped = this.tokenSource.dbPath.replace(/"/g, '\\"');
-				const { stdout } = await this.deps.exec(`sqlite3 "${escaped}" "select value from auth_kv where key='kirocli:social:token' limit 1;"`);
-				const value = stdout.trim();
-				if (value) {
-					const parsed = JSON.parse(value) as { access_token?: string; profile_arn?: string; expires_at?: string | number };
-					if (parsed.access_token) {
-						return {
-							access_token: parsed.access_token,
-							profile_arn: parsed.profile_arn,
-							expires_at_ms: parseExpiresAtMs(parsed.expires_at),
-						};
-					}
+				const parsed = await readKiroCliToken(
+					this.tokenSource.dbPath,
+					this.deps.platform,
+					this.deps.exec,
+					this.deps.readSqliteValue
+				);
+				if (parsed) {
+					return parsed;
 				}
 			} else {
-				const { stdout } = await this.deps.exec(`cat "${this.tokenSource.filePath}"`);
-				const parsed = JSON.parse(stdout) as { accessToken?: string; profileArn?: string; expiresAt?: string | number };
-				if (parsed.accessToken) {
+				const parsed = await this.deps.readJsonFile<{ accessToken?: string; profileArn?: string; expiresAt?: string | number }>(this.tokenSource.filePath);
+				if (parsed?.accessToken) {
 					return {
 						access_token: parsed.accessToken,
 						profile_arn: parsed.profileArn,
@@ -216,6 +218,8 @@ export async function discoverKiroProviders(
 	deps: KiroProviderDeps = {}
 ): Promise<void> {
 	const execFn = deps.exec ?? execAsync;
+	const readJson = deps.readJsonFile ?? readJsonFile;
+	const readSqliteValue = deps.readSqliteValue ?? readSqliteStringValue;
 	const homeDir = deps.homeDir ?? os.homedir();
 	const platform = deps.platform ?? process.platform;
 	const env = deps.env ?? process.env;
@@ -225,33 +229,25 @@ export async function discoverKiroProviders(
 	// Source 1: kiro-cli SQLite DB
 	const dbPath = getDbPath(platform, homeDir, env);
 	if (dbPath) {
-		const escaped = dbPath.replace(/"/g, '\\"');
 		try {
-			const { stdout } = await execFn(`sqlite3 "${escaped}" "select value from auth_kv where key='kirocli:social:token' limit 1;"`);
-			const value = stdout.trim();
-			if (value) {
-				const parsed = JSON.parse(value) as { access_token?: string; profile_arn?: string; expires_at?: string | number };
-				if (parsed.access_token) {
-					found.push({
-						token: {
-							access_token: parsed.access_token,
-							profile_arn: parsed.profile_arn,
-							expires_at_ms: parseExpiresAtMs(parsed.expires_at),
-						},
-						source: 'CLI',
-						tokenSource: { kind: 'cli', dbPath },
-					});
-				}
+			const parsed = await readKiroCliToken(dbPath, platform, execFn, readSqliteValue);
+			if (parsed) {
+				found.push({
+					token: parsed,
+					source: 'CLI',
+					tokenSource: { kind: 'cli', dbPath },
+				});
 			}
-		} catch { /* not available */ }
+		} catch {
+			/* not available */
+		}
 	}
 
 	// Source 2: Kiro IDE (~/.aws/sso/cache/kiro-auth-token.json)
 	const ideCredsPath = path.join(homeDir, '.aws', 'sso', 'cache', 'kiro-auth-token.json');
 	try {
-		const { stdout } = await execFn(`cat "${ideCredsPath}"`);
-		const parsed = JSON.parse(stdout) as { accessToken?: string; profileArn?: string; expiresAt?: string | number };
-		if (parsed.accessToken) {
+		const parsed = await readJson<{ accessToken?: string; profileArn?: string; expiresAt?: string | number }>(ideCredsPath);
+		if (parsed?.accessToken) {
 			found.push({
 				token: {
 					access_token: parsed.accessToken,
@@ -262,7 +258,9 @@ export async function discoverKiroProviders(
 				tokenSource: { kind: 'ide', filePath: ideCredsPath },
 			});
 		}
-	} catch { /* not available */ }
+	} catch {
+		/* not available */
+	}
 
 	// Determine labels: "Kiro" if single unique account, "Kiro CLI"/"Kiro IDE" if different accounts
 	const uniqueArns = new Set(found.map(f => f.token.profile_arn ?? f.token.access_token.slice(0, 20)));
@@ -333,6 +331,53 @@ function parseExpiresAtMs(value: unknown): number | undefined {
 		if (!Number.isNaN(parsed)) return parsed;
 	}
 	return undefined;
+}
+
+async function readKiroCliToken(
+	dbPath: string,
+	platform: NodeJS.Platform,
+	execFn: (command: string, options?: { timeout?: number }) => Promise<{ stdout: string; stderr?: string }>,
+	readSqliteValue: (dbPath: string, query: string) => Promise<string | null>
+): Promise<KiroToken | null> {
+	if (platform === 'win32') {
+		try {
+			const value = (await readSqliteValue(dbPath, KIRO_CLI_TOKEN_QUERY))?.trim() ?? null;
+			if (!value) {
+				return null;
+			}
+
+			const parsed = JSON.parse(value) as { access_token?: string; profile_arn?: string; expires_at?: string | number };
+			if (!parsed.access_token) {
+				return null;
+			}
+
+			return {
+				access_token: parsed.access_token,
+				profile_arn: parsed.profile_arn,
+				expires_at_ms: parseExpiresAtMs(parsed.expires_at),
+			};
+		} catch {
+			// Fall back to the sqlite3 CLI if the bundled reader cannot load this DB.
+		}
+	}
+
+	const escaped = dbPath.replace(/"/g, '\\"');
+	const { stdout } = await execFn(`sqlite3 "${escaped}" "${KIRO_CLI_TOKEN_QUERY}"`);
+	const value = stdout.trim();
+	if (!value) {
+		return null;
+	}
+
+	const parsed = JSON.parse(value) as { access_token?: string; profile_arn?: string; expires_at?: string | number };
+	if (!parsed.access_token) {
+		return null;
+	}
+
+	return {
+		access_token: parsed.access_token,
+		profile_arn: parsed.profile_arn,
+		expires_at_ms: parseExpiresAtMs(parsed.expires_at),
+	};
 }
 
 function getDbPath(platform: NodeJS.Platform, homeDir: string, env: NodeJS.ProcessEnv): string | null {

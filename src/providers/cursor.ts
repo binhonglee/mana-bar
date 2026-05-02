@@ -10,6 +10,7 @@ import {
 	CursorPricingResponse,
 	parseCursorUsageResponse,
 } from './cursor-parse';
+import { readSqliteStringValue } from '../sqlite-reader';
 
 const execAsync = promisify(defaultExec);
 
@@ -17,6 +18,7 @@ interface CursorProviderDeps {
 	now?: () => number;
 	fetch?: typeof fetch;
 	exec?: (command: string) => Promise<{ stdout: string; stderr?: string }>;
+	readStateDbValue?: (dbPath: string, query: string) => Promise<string | null>;
 	homeDir?: string;
 	platform?: NodeJS.Platform;
 	env?: NodeJS.ProcessEnv;
@@ -41,6 +43,7 @@ export class CursorProvider extends UsageProvider {
 			now: deps.now ?? Date.now,
 			fetch: deps.fetch ?? fetch,
 			exec: deps.exec ?? execAsync,
+			readStateDbValue: deps.readStateDbValue ?? readSqliteStringValue,
 			homeDir: deps.homeDir ?? os.homedir(),
 			platform: deps.platform ?? process.platform,
 			env: deps.env ?? process.env,
@@ -144,11 +147,21 @@ export class CursorProvider extends UsageProvider {
 			return null;
 		}
 
+		const query = "select value from ItemTable where key='cursorAuth/accessToken' limit 1;";
 		const escapedPath = dbPath.replace(/"/g, '\\"');
-		const command = `sqlite3 "${escapedPath}" "select value from ItemTable where key='cursorAuth/accessToken' limit 1;"`;
+		const command = `sqlite3 "${escapedPath}" "${query}"`;
 		try {
 			const { stdout } = await this.deps.exec(command);
 			const accessToken = stdout.trim();
+			if (!accessToken) {
+				return null;
+			}
+			return { accessToken };
+		} catch {
+		}
+
+		try {
+			const accessToken = (await this.deps.readStateDbValue(dbPath, query))?.trim() ?? '';
 			if (!accessToken) {
 				return null;
 			}
