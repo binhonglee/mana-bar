@@ -2,7 +2,7 @@
   "name": "mana-bar",
   "displayName": "mana.bar",
   "description": "Track usage limits across multiple LLM services (Claude Code, Codex, VSCode Copilot, Copilot CLI, Cursor, Antigravity, Gemini, Kiro)",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "binhonglee",
   "engines": {
     "vscode": "^1.93.0"
@@ -171,7 +171,7 @@
   "devDependencies": {
     "@playwright/test": "1.59.1",
     "@types/node": "25.6.0",
-    "@types/vscode": "1.116.0",
+    "@types/vscode": "1.93.0",
     "@vitest/coverage-v8": "4.1.5",
     "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "3.9.1",
@@ -181,6 +181,6 @@
     "vitest": "4.1.5"
   },
   "dependencies": {
-    "sql.js": "^1.14.1"
+    "sql.js": "1.14.1"
   }
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.6] - 2026-05-02
+### Added
+- **Windows compatibility** — Providers now work on Windows: sql.js-backed SQLite reader for Cursor and Kiro credential discovery, Windows-native CLI lookup for Codex, Gemini, and Antigravity (where/taskkill, npm shim resolution).
+- **Claude Code health states** — The provider now surfaces rate-limit, overload, and API error health states, giving clearer feedback when the service is degraded. A generic "unavailable" health status is also recorded when provider refreshes throw.
+- **Provider re-discovery** — When no usage data is cached on refresh, providers are re-discovered to pick up newly configured services.
+- **Outage refresh notifications** — Usage updates are now notified after outage refresh so the UI stays in sync.
+
+### Fixed
+- **Dashboard flicker** — Service cards no longer flicker on dashboard re-render.
+
 ## [0.0.5] - 2026-04-19
 ### Added
 - **Service health snapshots** — The dashboard, sidebar, and status bar now display per-service health state captured at each usage poll. Health history is serialized with the dashboard so state is preserved across reloads.
