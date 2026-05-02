@@ -196,6 +196,13 @@ export class GeminiProvider extends UsageProvider {
 		this.cacheExpiry = 0;
 	}
 
+	resetDiscovery(): void {
+		this.hasDiscovered = false;
+		this.availabilityChecked = false;
+		this.cachedQuotaResponse = null;
+		this.cacheExpiry = 0;
+	}
+
 	async getModels(): Promise<string[]> {
 		return this.discoveredModelIds;
 	}

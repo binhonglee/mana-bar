@@ -469,4 +469,97 @@ describe('AntigravityProvider', () => {
 		});
 		expect(fetch).toHaveBeenCalledTimes(1);
 	});
+
+	it('sub-provider clearCache forces parent to refetch on next getUsage', async () => {
+		const clock = new FixedClock(Date.parse('2026-03-10T10:00:00.000Z'));
+		const snapshot = createFsSnapshot({
+			files: {
+				[CREDENTIALS_FILE]: JSON.stringify({
+					accounts: [
+						{
+							email: 'person@example.com',
+							accessToken: 'live-token',
+							refreshToken: 'refresh-token',
+							expiresAt: clock.now() + 3_600_000,
+							projectId: 'proj-123',
+						},
+					],
+				}),
+			},
+		});
+		const fetch = vi.fn(async () => jsonResponse(AUTHORIZED_RESPONSE));
+		const provider = new AntigravityProvider(createExtensionContext(), {
+			now: clock.now,
+			homeDir: HOME,
+			platform: 'linux',
+			fetch: fetch as any,
+			...snapshot,
+		});
+		const providers: Array<{ getServiceName(): string; getUsage(): Promise<any>; clearCache(): void }> = [];
+
+		await provider.discoverQuotaGroups((usageProvider) => {
+			providers.push(usageProvider as any);
+		});
+
+		const flashProvider = providers.find(item => item.getServiceName() === 'Antigravity Gemini Flash')!;
+		await flashProvider.getUsage();
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		// Without clearCache, the parent serves cached data (no new fetch)
+		await flashProvider.getUsage();
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		// clearCache forces a fresh fetch on next getUsage
+		flashProvider.clearCache();
+		await flashProvider.getUsage();
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('resetDiscovery allows re-registering sub-providers', async () => {
+		const clock = new FixedClock(Date.parse('2026-03-10T10:00:00.000Z'));
+		const snapshot = createFsSnapshot({
+			files: {
+				[CREDENTIALS_FILE]: JSON.stringify({
+					accounts: [
+						{
+							email: 'person@example.com',
+							accessToken: 'live-token',
+							refreshToken: 'refresh-token',
+							expiresAt: clock.now() + 3_600_000,
+							projectId: 'proj-123',
+						},
+					],
+				}),
+			},
+		});
+		const fetch = vi.fn(async () => jsonResponse(AUTHORIZED_RESPONSE));
+		const provider = new AntigravityProvider(createExtensionContext(), {
+			now: clock.now,
+			homeDir: HOME,
+			platform: 'linux',
+			fetch: fetch as any,
+			...snapshot,
+		});
+		const firstRound: string[] = [];
+		const secondRound: string[] = [];
+
+		await provider.discoverQuotaGroups((usageProvider) => {
+			firstRound.push(usageProvider.getServiceName());
+		});
+		expect(firstRound.length).toBeGreaterThan(0);
+
+		// Without reset, second discovery is a no-op
+		await provider.discoverQuotaGroups((usageProvider) => {
+			secondRound.push(usageProvider.getServiceName());
+		});
+		expect(secondRound).toHaveLength(0);
+
+		// After reset, discovery runs again
+		provider.resetDiscovery();
+		const thirdRound: string[] = [];
+		await provider.discoverQuotaGroups((usageProvider) => {
+			thirdRound.push(usageProvider.getServiceName());
+		});
+		expect(thirdRound).toEqual(firstRound);
+	});
 });

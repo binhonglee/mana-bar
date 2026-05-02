@@ -311,6 +311,10 @@ export class KiroDiscoverable extends UsageProvider {
 	async getUsage(): Promise<UsageData | null> { return null; }
 	async getModels(): Promise<string[]> { return []; }
 
+	resetDiscovery(): void {
+		// Kiro has no discovery cache to reset
+	}
+
 	async discoverQuotaGroups(registerCallback: (provider: UsageProvider) => void): Promise<void> {
 		await discoverKiroProviders(registerCallback, this.deps);
 	}

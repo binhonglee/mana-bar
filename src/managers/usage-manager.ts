@@ -30,6 +30,7 @@ export class UsageManager {
 	private providers: Map<string, RegisteredProvider> = new Map();
 	private cache: Map<string, CacheEntry> = new Map();
 	private healthCache: Map<string, HealthEntry> = new Map();
+	private rediscoveryFns: Map<ServiceId, () => Promise<void>> = new Map();
 	private pollingTimer: NodeJS.Timeout | null = null;
 	private _onDidUpdateUsage = new vscode.EventEmitter<void>();
 	private readonly serviceNameCollator = new Intl.Collator(undefined, {
@@ -56,6 +57,20 @@ export class UsageManager {
 			serviceName,
 			provider,
 		});
+	}
+
+	removeProvidersByServiceId(serviceId: ServiceId): void {
+		for (const [name, reg] of this.providers) {
+			if (reg.serviceId === serviceId) {
+				this.providers.delete(name);
+				this.cache.delete(name);
+				this.healthCache.delete(name);
+			}
+		}
+	}
+
+	registerRediscovery(serviceId: ServiceId, fn: () => Promise<void>): void {
+		this.rediscoveryFns.set(serviceId, fn);
 	}
 
 	getRegisteredServiceNames(): string[] {
@@ -153,6 +168,51 @@ export class UsageManager {
 		}
 
 		await Promise.all(promises);
+
+		// Escalate: re-discover any enabled discoverable service that has no usage data
+		if (this.rediscoveryFns.size > 0) {
+			const serviceIdsWithData = new Set<ServiceId>();
+			for (const [name, reg] of this.providers) {
+				if (this.cache.has(name)) {
+					serviceIdsWithData.add(reg.serviceId);
+				}
+			}
+
+			for (const [serviceId, rediscover] of this.rediscoveryFns) {
+				const serviceConfig = servicesConfig[serviceId];
+				if (!serviceConfig?.enabled) {
+					continue;
+				}
+				if (serviceIdsWithData.has(serviceId)) {
+					continue;
+				}
+				debugLog(`[UsageManager] No data for ${serviceId}, attempting re-discovery`);
+				try {
+					await rediscover();
+				} catch (error) {
+					debugLog(`[UsageManager] Re-discovery failed for ${serviceId}:`, error);
+					continue;
+				}
+				// Refresh newly registered providers for this service
+				for (const [name, reg] of this.providers) {
+					if (reg.serviceId !== serviceId || this.cache.has(name)) {
+						continue;
+					}
+					try {
+						reg.provider.clearCache();
+						const data = await reg.provider.getUsage();
+						if (data) {
+							this.updateCache(name, data);
+						}
+						const health = reg.provider.getLastServiceHealth();
+						this.updateHealthCache(name, health);
+					} catch (error) {
+						debugLog(`[UsageManager] Post-rediscovery fetch failed for ${name}:`, error);
+					}
+				}
+			}
+		}
+
 		debugLog('[UsageManager] All providers refreshed, cache:', this.getAllUsageData());
 		this._onDidUpdateUsage.fire();
 	}

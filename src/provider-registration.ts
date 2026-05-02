@@ -17,8 +17,9 @@ export interface ProviderRegistrationResult {
 	testHarness?: TestProviderHarness;
 }
 
-interface DiscoverableProvider extends UsageProvider {
+export interface DiscoverableProvider extends UsageProvider {
 	discoverQuotaGroups(registerCallback: (provider: UsageProvider) => void): Promise<void>;
+	resetDiscovery(): void;
 }
 
 export interface ProviderRegistrationFactories {
@@ -119,6 +120,15 @@ export async function registerUsageProviders(
 		} catch (error) {
 			console.error(`[${getServiceDescriptor(registration.serviceId).name}] Discovery failed:`, error);
 		}
+
+		const serviceId = registration.serviceId;
+		usageManager.registerRediscovery(serviceId, async () => {
+			discoverableProvider.resetDiscovery();
+			usageManager.removeProvidersByServiceId(serviceId);
+			await discoverableProvider.discoverQuotaGroups((sub) => {
+				usageManager.registerProvider(sub);
+			});
+		});
 	}
 
 	return {};

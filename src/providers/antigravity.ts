@@ -807,6 +807,17 @@ export class AntigravityProvider extends UsageProvider {
 		return getAntigravityGroupName(family);
 	}
 
+	resetDiscovery(): void {
+		this.hasDiscovered = false;
+		this.cachedResponse = null;
+		this.responseCacheExpiry = 0;
+	}
+
+	clearResponseCache(): void {
+		this.cachedResponse = null;
+		this.responseCacheExpiry = 0;
+	}
+
 	getNow(): number {
 		return this.deps.now();
 	}
@@ -924,6 +935,10 @@ class AntigravityQuotaGroupProvider extends UsageProvider {
 			return 'Antigravity';
 		}
 		return `Antigravity ${this.groupName}`;
+	}
+
+	override clearCache(): void {
+		this.parent.clearResponseCache();
 	}
 
 	async isAvailable(): Promise<boolean> {
