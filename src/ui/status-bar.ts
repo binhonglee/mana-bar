@@ -62,7 +62,8 @@ export class StatusBarController {
 	private update(): void {
 		const displayMode = this.configManager?.getDisplayMode() ?? 'remaining';
 		const hidden = this.configManager?.getHiddenServices() ?? [];
-		const snapshots = this.usageManager.getServiceSnapshots()
+		const allSnapshots = this.usageManager.getServiceSnapshots();
+		const snapshots = allSnapshots
 			.filter(s => !hidden.includes(s.serviceName));
 
 		if (snapshots.length === 0) {

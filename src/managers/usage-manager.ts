@@ -137,7 +137,8 @@ export class UsageManager {
 					} else {
 						this.cache.delete(serviceName);
 					}
-					this.updateHealthCache(serviceName, provider.getLastServiceHealth());
+					const health = provider.getLastServiceHealth();
+					this.updateHealthCache(serviceName, health);
 				}).catch((error) => {
 					console.error(`Error fetching usage for ${serviceName}:`, error);
 					const health = provider.getLastServiceHealth() ?? {
