@@ -206,8 +206,8 @@ body {
 	min-width: 0;
 	overflow: hidden;
 	transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
-	animation: fadeInUp 0.4s ease forwards;
-	opacity: 0;
+	animation: fadeInUp 0.4s ease both;
+	opacity: 1;
 }
 
 .service-card:hover {
