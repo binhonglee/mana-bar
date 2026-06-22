@@ -169,7 +169,7 @@
     "test:ci": "npm run compile && npm run test:unit && npm run test:browser && npm run test:e2e"
   },
   "devDependencies": {
-    "@playwright/test": "1.60.0",
+    "@playwright/test": "1.61.0",
     "@types/node": "25.9.3",
     "@types/vscode": "1.120.0",
     "@vitest/coverage-v8": "4.1.8",
