@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildUsageBlock,
 	formatUsageDisplay,
+	formatUsageNumber,
 	getDisplayModeVerb,
 	getDisplayPercent,
 	getDisplayValue,
 	getRemainingValue,
 	getUsedPercent,
+	roundUsageNumber,
 	toServiceViewModel,
 	toUsageMetricViewModel,
 } from '../../src/usage-display';
@@ -25,6 +27,19 @@ describe('usage-display', () => {
 		expect(formatUsageDisplay(40, 100, 'remaining')).toBe('60%');
 		expect(formatUsageDisplay(3, 4, 'used')).toBe('3/4');
 		expect(formatUsageDisplay(3, 4, 'remaining')).toBe('1/4');
+	});
+
+	it('rounds usage text to 2 decimal places without float artifacts', () => {
+		// Classic binary float residue from dollar remaining: 20 - 18.68
+		expect(20 - 18.68).toBe(1.3200000000000003);
+		expect(getRemainingValue(18.68, 20)).toBe(1.32);
+		expect(formatUsageDisplay(18.68, 20, 'remaining')).toBe('1.32/20');
+		expect(formatUsageDisplay(1.3200000000000003, 20, 'used')).toBe('1.32/20');
+		expect(formatUsageNumber(1.3)).toBe('1.30');
+		expect(formatUsageNumber(20)).toBe('20');
+		expect(roundUsageNumber(1.3200000000000003)).toBe(1.32);
+		expect(formatUsageNumber(Number.NaN)).toBe('NaN');
+		expect(roundUsageNumber(Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
 	});
 
 	it('clamps display percentages and exposes display labels', () => {
@@ -121,6 +136,13 @@ describe('toUsageMetricViewModel', () => {
 		expect(result.displayText).toBe('3/10');
 		expect(result.displayValueText).toBe('3');
 		expect(result.displayUnit).toBe('');
+	});
+
+	it('formats fractional remaining without float noise', () => {
+		const result = toUsageMetricViewModel(18.68, 20, undefined, 'remaining');
+
+		expect(result.displayText).toBe('1.32/20');
+		expect(result.displayValueText).toBe('1.32');
 	});
 
 	it('handles undefined reset time', () => {

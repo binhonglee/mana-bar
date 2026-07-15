@@ -51,6 +51,11 @@ function toPercentWindow(label: string, percent: number, resetTime: Date | undef
 	};
 }
 
+/** Convert spend cents to dollars rounded to 2 decimal places (stable vs binary float). */
+function centsToDollars(cents: number): number {
+	return Number((Math.round(cents) / 100).toFixed(2));
+}
+
 export function parseCursorUsageResponse(
 	response: CursorCurrentPeriodUsageResponse,
 	pricing: CursorPricingResponse | null,
@@ -69,8 +74,8 @@ export function parseCursorUsageResponse(
 	}
 
 	const resetTime = toDateFromEpochMillis(response.billingCycleEnd);
-	const spendUsed = Math.round(includedSpendCents) / 100;
-	const spendLimit = Math.round(limitCents) / 100;
+	const spendUsed = centsToDollars(includedSpendCents);
+	const spendLimit = centsToDollars(limitCents);
 	const hasAutoSpillover = pricing?.hasAutoSpillover === true;
 	const autoPercentUsed = toFiniteNumber(planUsage.autoPercentUsed);
 	const apiPercentUsed = toFiniteNumber(planUsage.apiPercentUsed);
