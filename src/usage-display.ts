@@ -18,8 +18,30 @@ export function getUsedPercent(used: number, limit: number): number {
 	return clampPercent(percent);
 }
 
+/** Round to hundredths and strip binary float noise (e.g. 20 - 18.68 → 1.3200000000000003). */
+export function roundUsageNumber(value: number): number {
+	if (!Number.isFinite(value)) {
+		return value;
+	}
+
+	return Number(value.toFixed(2));
+}
+
+/**
+ * Format a usage quantity for status bar / dashboard text.
+ * Always shows at most 2 decimal places; omits ".00" for whole numbers.
+ */
+export function formatUsageNumber(value: number): string {
+	if (!Number.isFinite(value)) {
+		return String(value);
+	}
+
+	const fixed = roundUsageNumber(value).toFixed(2);
+	return fixed.endsWith('.00') ? fixed.slice(0, -3) : fixed;
+}
+
 export function getRemainingValue(used: number, limit: number): number {
-	return Math.max(0, limit - used);
+	return Math.max(0, roundUsageNumber(limit - used));
 }
 
 export function getDisplayValue(used: number, limit: number, mode: UsageDisplayMode): number {
@@ -37,7 +59,11 @@ export function getDisplayPercent(used: number, limit: number, mode: UsageDispla
 
 export function formatUsageDisplay(used: number, limit: number, mode: UsageDisplayMode): string {
 	const value = getDisplayValue(used, limit, mode);
-	return limit === 100 ? `${value}%` : `${value}/${limit}`;
+	if (limit === 100) {
+		return `${formatUsageNumber(value)}%`;
+	}
+
+	return `${formatUsageNumber(value)}/${formatUsageNumber(limit)}`;
 }
 
 export function getDisplayModeVerb(mode: UsageDisplayMode): string {
@@ -98,7 +124,7 @@ export function toUsageMetricViewModel(
 		used,
 		limit,
 		displayText: formatUsageDisplay(used, limit, displayMode),
-		displayValueText: String(displayValue),
+		displayValueText: formatUsageNumber(displayValue),
 		displayUnit: limit === 100 ? '%' : '',
 		displayPercent: getDisplayPercent(used, limit, displayMode),
 		displayVerb: getDisplayModeVerb(displayMode),

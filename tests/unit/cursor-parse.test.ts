@@ -84,6 +84,21 @@ describe('parseCursorUsageResponse', () => {
 		});
 	});
 
+	it('stores dollar spend without binary float residue', () => {
+		const result = parseCursorUsageResponse({
+			planUsage: {
+				includedSpend: 132,
+				limit: 2000,
+			},
+		}, {
+			hasAutoSpillover: false,
+		});
+
+		expect(result?.totalUsed).toBe(1.32);
+		expect(result?.totalLimit).toBe(20);
+		expect(String(result?.totalUsed)).toBe('1.32');
+	});
+
 	it('handles only autoPercentUsed present', () => {
 		const result = parseCursorUsageResponse({
 			planUsage: {
