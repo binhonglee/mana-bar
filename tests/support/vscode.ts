@@ -45,6 +45,10 @@ export class ThemeIcon {
 	constructor(public readonly id: string) {}
 }
 
+export class ThemeColor {
+	constructor(public readonly id: string) {}
+}
+
 export enum TreeItemCollapsibleState {
 	None = 0,
 	Collapsed = 1,
