@@ -79,6 +79,13 @@ export const SERVICE_DESCRIPTORS: Record<ServiceId, ServiceDescriptor> = {
 		defaultEnabled: true,
 		getShortLabel: () => 'Kiro',
 	},
+	opencodeGo: {
+		id: 'opencodeGo',
+		name: 'OpenCode Go',
+		description: 'OpenCode Go plan usage',
+		defaultEnabled: true,
+		getShortLabel: () => 'OCGo',
+	},
 };
 
 export function getServiceDescriptor(serviceId: ServiceId): ServiceDescriptor {

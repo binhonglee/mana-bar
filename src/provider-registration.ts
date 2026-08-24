@@ -8,6 +8,7 @@ import { CursorProvider } from './providers/cursor';
 import { AntigravityProvider } from './providers/antigravity';
 import { GeminiProvider } from './providers/gemini';
 import { KiroDiscoverable } from './providers/kiro';
+import { OpenCodeGoProvider } from './providers/opencode-go';
 import type { TestProviderHarness } from './testing/fake-providers';
 import { UsageProvider } from './providers/base';
 import { ServiceId } from './types';
@@ -31,6 +32,7 @@ export interface ProviderRegistrationFactories {
 	createAntigravityProvider?: (context: vscode.ExtensionContext) => DiscoverableProvider;
 	createGeminiProvider?: () => DiscoverableProvider;
 	createKiroProvider?: () => DiscoverableProvider;
+	createOpenCodeGoProvider?: () => UsageProvider;
 	createTestHarness?: () => TestProviderHarness;
 }
 
@@ -88,6 +90,11 @@ const PROVIDER_REGISTRATIONS: ProviderRegistrationDescriptor[] = [
 		serviceId: 'kiro',
 		mode: 'discoverable',
 		create: (_context, factories) => factories?.createKiroProvider?.() ?? new KiroDiscoverable(),
+	},
+	{
+		serviceId: 'opencodeGo',
+		mode: 'static',
+		create: (_context, factories) => factories?.createOpenCodeGoProvider?.() ?? new OpenCodeGoProvider(),
 	},
 ];
 
