@@ -22,6 +22,7 @@ describe('service registry', () => {
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 			kiro: { enabled: true },
+			opencodeGo: { enabled: true },
 		});
 	});
 

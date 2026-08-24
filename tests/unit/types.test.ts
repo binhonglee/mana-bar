@@ -54,8 +54,8 @@ describe('Core types module', () => {
 	});
 
 	describe('SERVICE_IDS', () => {
-		it('contains exactly 8 service identifiers', () => {
-			expect(SERVICE_IDS).toHaveLength(8);
+		it('contains exactly 9 service identifiers', () => {
+			expect(SERVICE_IDS).toHaveLength(9);
 		});
 
 		it('contains all expected service identifiers', () => {
@@ -67,6 +67,7 @@ describe('Core types module', () => {
 			expect(SERVICE_IDS).toContain('antigravity');
 			expect(SERVICE_IDS).toContain('gemini');
 			expect(SERVICE_IDS).toContain('kiro');
+			expect(SERVICE_IDS).toContain('opencodeGo');
 		});
 	});
 

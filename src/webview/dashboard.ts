@@ -4,7 +4,7 @@ namespace DashboardApp {
 	type UsageStatus = 'ok' | 'warning' | 'critical';
 	type DisplayMode = 'used' | 'remaining';
 	type TooltipLayout = 'regular' | 'monospaced';
-	type ServiceId = 'claudeCode' | 'codex' | 'vscodeCopilot' | 'antigravity' | 'gemini' | 'kiro' | 'cursor' | 'copilotCli';
+	type ServiceId = 'claudeCode' | 'codex' | 'vscodeCopilot' | 'antigravity' | 'gemini' | 'kiro' | 'cursor' | 'copilotCli' | 'opencodeGo';
 	type ServiceHealthKind = 'reauthRequired' | 'rateLimited' | 'unavailable';
 
 	interface ServiceDescriptor {

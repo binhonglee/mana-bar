@@ -1,4 +1,4 @@
-export const SERVICE_IDS = ['claudeCode', 'codex', 'vscodeCopilot', 'copilotCli', 'cursor', 'antigravity', 'gemini', 'kiro'] as const;
+export const SERVICE_IDS = ['claudeCode', 'codex', 'vscodeCopilot', 'copilotCli', 'cursor', 'antigravity', 'gemini', 'kiro', 'opencodeGo'] as const;
 export type ServiceId = typeof SERVICE_IDS[number];
 
 /**

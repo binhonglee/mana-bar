@@ -137,6 +137,7 @@ describe('registerUsageProviders', () => {
 						callback(new StaticProvider('kiro', 'Kiro'));
 					},
 				}) as any,
+				createOpenCodeGoProvider: () => new StaticProvider('opencodeGo', 'OpenCode Go'),
 			},
 		});
 
@@ -149,6 +150,7 @@ describe('registerUsageProviders', () => {
 			'Antigravity Gemini Flash',
 			'Gemini CLI 2.5 Pro',
 			'Kiro',
+			'OpenCode Go',
 		]);
 	});
 
@@ -201,6 +203,7 @@ describe('registerUsageProviders', () => {
 						callback(new StaticProvider('kiro', 'Kiro'));
 					},
 				}) as any,
+				createOpenCodeGoProvider: () => new StaticProvider('opencodeGo', 'OpenCode Go'),
 			},
 		});
 
@@ -213,6 +216,7 @@ describe('registerUsageProviders', () => {
 			'Cursor',
 			'Gemini CLI 2.5 Pro',
 			'Kiro',
+			'OpenCode Go',
 		]);
 	});
 

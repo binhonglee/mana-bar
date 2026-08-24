@@ -23,6 +23,7 @@ describe('ConfigManager', () => {
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 			kiro: { enabled: true },
+			opencodeGo: { enabled: true },
 		});
 		expect(manager.getHiddenServices()).toEqual([]);
 	});
@@ -48,6 +49,7 @@ describe('ConfigManager', () => {
 			antigravity: { enabled: true },
 			gemini: { enabled: true },
 			kiro: { enabled: true },
+			opencodeGo: { enabled: true },
 		});
 		expect(manager.getDisplayMode()).toBe('remaining');
 		expect(manager.getStatusBarTooltipLayout()).toBe('monospaced');

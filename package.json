@@ -134,6 +134,9 @@
             },
             "kiro": {
               "enabled": true
+            },
+            "opencodeGo": {
+              "enabled": true
             }
           },
           "description": "Enable or disable usage tracking for each supported service."
