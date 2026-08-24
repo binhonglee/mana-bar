@@ -42,7 +42,7 @@ export class CursorProvider extends UsageProvider {
 		this.deps = {
 			now: deps.now ?? Date.now,
 			fetch: deps.fetch ?? fetch,
-			exec: deps.exec ?? execAsync,
+			exec: deps.exec ?? ((command: string) => execAsync(command, { timeout: 10_000 })),
 			readStateDbValue: deps.readStateDbValue ?? readSqliteStringValue,
 			homeDir: deps.homeDir ?? os.homedir(),
 			platform: deps.platform ?? process.platform,
@@ -142,6 +142,23 @@ export class CursorProvider extends UsageProvider {
 			return { accessToken: envToken };
 		}
 
+		// Prefer the Cursor editor's local auth DB, then fall back to the
+		// cursor-agent CLI's token in the OS secret store so CLI-only machines
+		// (no editor installed) still surface Cursor quota.
+		const editorToken = await this.loadEditorToken();
+		if (editorToken) {
+			return { accessToken: editorToken };
+		}
+
+		const cliToken = await this.loadCliToken();
+		if (cliToken) {
+			return { accessToken: cliToken };
+		}
+
+		return null;
+	}
+
+	private async loadEditorToken(): Promise<string | null> {
 		const dbPath = this.getCursorStateDbPath();
 		if (!dbPath) {
 			return null;
@@ -153,22 +170,49 @@ export class CursorProvider extends UsageProvider {
 		try {
 			const { stdout } = await this.deps.exec(command);
 			const accessToken = stdout.trim();
-			if (!accessToken) {
-				return null;
+			if (accessToken) {
+				return accessToken;
 			}
-			return { accessToken };
 		} catch {
 		}
 
 		try {
-			const accessToken = (await this.deps.readStateDbValue(dbPath, query))?.trim() ?? '';
-			if (!accessToken) {
-				return null;
-			}
-			return { accessToken };
+			return (await this.deps.readStateDbValue(dbPath, query))?.trim() || null;
 		} catch {
 			return null;
 		}
+	}
+
+	private async loadCliToken(): Promise<string | null> {
+		const command = this.getCliKeychainCommand();
+		if (!command) {
+			return null;
+		}
+
+		try {
+			const { stdout } = await this.deps.exec(command);
+			return stdout.trim() || null;
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Command that reads the cursor-agent CLI's OAuth access token from the OS
+	 * secret store. The CLI stores it under service "cursor-access-token"
+	 * (account "cursor-user"). Returns null on platforms without a portable
+	 * lookup; those users can set MANA_BAR_CURSOR_ACCESS_TOKEN instead.
+	 */
+	private getCliKeychainCommand(): string | null {
+		if (this.deps.platform === 'darwin') {
+			return 'security find-generic-password -s "cursor-access-token" -a "cursor-user" -w';
+		}
+		if (this.deps.platform === 'linux') {
+			// libsecret (Secret Service) via keytar uses matching attributes;
+			// best-effort and fails safe when secret-tool or the entry is absent.
+			return 'secret-tool lookup service cursor-access-token account cursor-user';
+		}
+		return null;
 	}
 
 	private getCursorStateDbPath(): string | null {
