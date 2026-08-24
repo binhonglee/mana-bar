@@ -50,7 +50,7 @@ Enable or disable individual services, adjust polling intervals, pick your displ
 | **Claude Code** | Anthropic OAuth (keychain / `.credentials.json`) | Reads 5-hour and 7-day utilization from the Anthropic usage API |
 | **Codex** | `~/.codex/auth.json` or OS keychain | Spawns `codex app-server` and queries rate limits via JSON-RPC |
 | **Copilot CLI** | `~/.copilot/config.json` plus OS keychain / SecretStorage / `hosts.json` | Reads usage from GitHub Copilot's entitlement API |
-| **Cursor** | Cursor local auth DB (`state.vscdb`) or `MANA_BAR_CURSOR_ACCESS_TOKEN` | Calls Cursor dashboard APIs to show monthly spend plus Auto + Composer / API split usage when available |
+| **Cursor** | Cursor editor auth DB (`state.vscdb`), `cursor-agent` CLI token (OS keychain), or `MANA_BAR_CURSOR_ACCESS_TOKEN` | Calls Cursor dashboard APIs to show monthly spend plus Auto + Composer / API split usage when available |
 | **Gemini CLI** | Google OAuth (keychain / `oauth_creds.json`) | Queries `cloudcode-pa.googleapis.com` quota endpoints |
 | **Kiro** | Kiro CLI SQLite DB (`kiro-cli/data.sqlite3`) or Kiro IDE (`~/.aws/sso/cache/kiro-auth-token.json`) | Queries the CodeWhisperer usage API for credit consumption and plan limits |
 | **VSCode Copilot** | VS Code's built-in Copilot session | Reads usage from GitHub Copilot's entitlement API |
