@@ -173,7 +173,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",
-    "@types/node": "26.1.1",
+    "@types/node": "26.4.0",
     "@types/vscode": "1.93.0",
     "@vitest/coverage-v8": "4.1.10",
     "@vscode/test-electron": "3.0.0",
