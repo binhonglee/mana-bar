@@ -184,6 +184,6 @@
     "vitest": "4.1.11"
   },
   "dependencies": {
-    "sql.js": "1.14.1"
+    "sql.js": "1.14.2"
   }
 }
