@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.9] - 2026-11-02
+### Changed
+- Fix Marketplace OIDC publish and make releases safe to retry
+
 ## [0.0.8] - 2026-11-02
 ### Changed
 - build(deps): bump sql.js from 1.14.2 to 1.15.2
