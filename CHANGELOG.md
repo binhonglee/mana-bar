@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.8] - 2026-11-02
+### Changed
+- build(deps): bump sql.js from 1.14.2 to 1.15.2
+- Publish to VS Marketplace via Trusted Publishing instead of a PAT
+- Add Dependabot auto-merge and weekly marketplace release
+- build(deps): bump sql.js from 1.14.1 to 1.14.2
+- Add OpenCode Go usage provider
+- Add cursor-agent CLI keychain auth to Cursor provider (#55)
+
 ## [0.0.6] - 2026-05-02
 ### Added
 - **Windows compatibility** — Providers now work on Windows: sql.js-backed SQLite reader for Cursor and Kiro credential discovery, Windows-native CLI lookup for Codex, Gemini, and Antigravity (where/taskkill, npm shim resolution).
