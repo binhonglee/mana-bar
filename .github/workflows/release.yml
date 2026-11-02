@@ -1,0 +1,130 @@
+name: Weekly Release
+
+on:
+  schedule:
+    # Mondays at 16:17 UTC
+    - cron: "17 16 * * 1"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Release even if there are no shippable changes since the last release"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Check for changes since last release
+        id: changes
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          # Last release = latest v* tag, or (before the first tag exists) the last commit that changed the version in package.json.
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || git log -1 --format=%H -G'"version":' -- package.json)
+          echo "Last release: $last"
+
+          # Ignore dev-dependency bumps and commits that only touch CI/tests, since they don't change the shipped extension.
+          shippable=""
+          for sha in $(git rev-list "$last"..HEAD); do
+            subject=$(git log -1 --format=%s "$sha")
+            case "$subject" in build\(deps-dev\)*) continue ;; esac
+            if git diff-tree --no-commit-id --name-only -r "$sha" | grep -qvE '^(\.github/|tests/|\.vscode/)'; then
+              shippable+="- ${subject}"$'\n'
+            fi
+          done
+
+          if [ -z "$shippable" ] && [ "$FORCE" != "true" ]; then
+            echo "No shippable changes since $last; skipping release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes<<EOF_NOTES"
+            if [ -n "$shippable" ]; then printf '%s' "$shippable"; else echo "- Maintenance release"; fi
+            echo "EOF_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v7
+        if: steps.changes.outputs.release == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.changes.outputs.release == 'true'
+        run: npm ci
+
+      - name: Install Playwright browser
+        if: steps.changes.outputs.release == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run tests
+        if: steps.changes.outputs.release == 'true'
+        run: xvfb-run -a npm run test:ci
+
+      - name: Bump version and update changelog
+        if: steps.changes.outputs.release == 'true'
+        id: version
+        env:
+          NOTES: ${{ steps.changes.outputs.notes }}
+        run: |
+          version=$(npm version patch --no-git-tag-version | sed 's/^v//')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          node -e '
+            const fs = require("fs");
+            const [version, notes] = process.argv.slice(1);
+            const date = new Date().toISOString().slice(0, 10);
+            const log = fs.readFileSync("CHANGELOG.md", "utf8");
+            const entry = `## [${version}] - ${date}\n### Changed\n${notes.trim()}\n\n`;
+            fs.writeFileSync("CHANGELOG.md", log.replace(/^(# Changelog\n+)/, `$1${entry}`));
+          ' "$version" "$NOTES"
+
+      - name: Package extension
+        if: steps.changes.outputs.release == 'true'
+        run: npx vsce package -o mana-bar-${{ steps.version.outputs.version }}.vsix
+
+      - name: Commit and tag release
+        if: steps.changes.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "release v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:main "v$VERSION"
+
+      - name: Publish to Visual Studio Marketplace
+        if: steps.changes.outputs.release == 'true'
+        run: npx vsce publish --packagePath mana-bar-${{ steps.version.outputs.version }}.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX
+        if: steps.changes.outputs.release == 'true'
+        run: npx ovsx publish mana-bar-${{ steps.version.outputs.version }}.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Create GitHub release
+        if: steps.changes.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          NOTES: ${{ steps.changes.outputs.notes }}
+        run: gh release create "v$VERSION" "mana-bar-$VERSION.vsix" --title "v$VERSION" --notes "$NOTES"
