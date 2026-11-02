@@ -54,8 +54,8 @@ jobs:
             exit 0
           fi
 
-          echo "release=true" >> "$GITHUB_OUTPUT"
           {
+            echo "release=true"
             echo "notes<<EOF_NOTES"
             if [ -n "$shippable" ]; then printf '%s' "$shippable"; else echo "- Maintenance release"; fi
             echo "EOF_NOTES"
@@ -81,7 +81,7 @@ jobs:
 
       - name: Bump version and update changelog
         if: steps.changes.outputs.release == 'true'
-        id: version
+        id: bump
         env:
           NOTES: ${{ steps.changes.outputs.notes }}
         run: |
@@ -98,12 +98,31 @@ jobs:
 
       - name: Package extension
         if: steps.changes.outputs.release == 'true'
-        run: npx vsce package -o mana-bar-${{ steps.version.outputs.version }}.vsix
+        id: package
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "vsix=mana-bar-$VERSION.vsix" >> "$GITHUB_OUTPUT"
+          npx vsce package -o "mana-bar-$VERSION.vsix"
+
+      # Publish before pushing the release commit/tag, so a failed publish leaves main untouched and the run can simply be retried.
+      # --skip-duplicate makes retries safe if one of the two stores already has this version.
+      - name: Publish to Visual Studio Marketplace
+        if: steps.changes.outputs.release == 'true'
+        # Uses Marketplace Trusted Publishing; requires a policy for this repo + release.yml on the publisher.
+        run: npx vsce publish --oidc --skip-duplicate --packagePath "${{ steps.package.outputs.vsix }}"
+
+      - name: Publish to Open VSX
+        if: steps.changes.outputs.release == 'true'
+        run: npx ovsx publish --skip-duplicate "${{ steps.package.outputs.vsix }}"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
       - name: Commit and tag release
         if: steps.changes.outputs.release == 'true'
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.package.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -111,21 +130,16 @@ jobs:
           git tag "v$VERSION"
           git push origin HEAD:main "v$VERSION"
 
-      - name: Publish to Visual Studio Marketplace
-        if: steps.changes.outputs.release == 'true'
-        # Uses Marketplace Trusted Publishing; requires a policy for this repo + release.yml on the publisher.
-        run: npx vsce publish --oidc --packagePath mana-bar-${{ steps.version.outputs.version }}.vsix
-
-      - name: Publish to Open VSX
-        if: steps.changes.outputs.release == 'true'
-        run: npx ovsx publish mana-bar-${{ steps.version.outputs.version }}.vsix
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-
       - name: Create GitHub release
         if: steps.changes.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.package.outputs.version }}
+          VSIX: ${{ steps.package.outputs.vsix }}
           NOTES: ${{ steps.changes.outputs.notes }}
-        run: gh release create "v$VERSION" "mana-bar-$VERSION.vsix" --title "v$VERSION" --notes "$NOTES"
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "$VSIX" --clobber
+          else
+            gh release create "v$VERSION" "$VSIX" --title "v$VERSION" --notes "$NOTES"
+          fi
