@@ -177,7 +177,7 @@
     "@types/vscode": "1.93.0",
     "@vitest/coverage-v8": "5.0.5",
     "@vscode/test-electron": "3.0.0",
-    "@vscode/vsce": "4.0.0",
+    "@vscode/vsce": "4.1.0",
     "fast-check": "4.10.2",
     "ovsx": "1.3.0",
     "tsx": "4.23.15",
