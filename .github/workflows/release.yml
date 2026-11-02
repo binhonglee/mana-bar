@@ -17,6 +17,8 @@ concurrency:
 
 permissions:
   contents: write
+  # Lets vsce exchange a GitHub OIDC token for a Marketplace credential (Trusted Publishing).
+  id-token: write
 
 jobs:
   release:
@@ -111,9 +113,8 @@ jobs:
 
       - name: Publish to Visual Studio Marketplace
         if: steps.changes.outputs.release == 'true'
-        run: npx vsce publish --packagePath mana-bar-${{ steps.version.outputs.version }}.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        # Uses Marketplace Trusted Publishing; requires a policy for this repo + release.yml on the publisher.
+        run: npx vsce publish --oidc --packagePath mana-bar-${{ steps.version.outputs.version }}.vsix
 
       - name: Publish to Open VSX
         if: steps.changes.outputs.release == 'true'
