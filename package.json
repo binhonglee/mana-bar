@@ -175,14 +175,14 @@
     "@playwright/test": "1.65.1",
     "@types/node": "26.6.6",
     "@types/vscode": "1.93.0",
-    "@vitest/coverage-v8": "5.1.0",
+    "@vitest/coverage-v8": "5.1.1",
     "@vscode/test-electron": "3.0.0",
     "@vscode/vsce": "4.1.0",
     "fast-check": "4.10.3",
     "ovsx": "1.4.0",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "dependencies": {
     "sql.js": "1.17.0"
