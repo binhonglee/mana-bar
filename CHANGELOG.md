@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.11] - 2026-11-24
+### Changed
+- build(deps): bump sql.js from 1.16.0 to 1.17.0 (#86)
+
 ## [0.0.10] - 2026-11-17
 ### Changed
 - build(deps): bump sql.js from 1.15.2 to 1.16.0 (#82)
